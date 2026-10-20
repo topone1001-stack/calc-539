@@ -1,0 +1,9 @@
+node_modules/
+users.json
+ADMIN_PASSWORD.txt
+.session_secret
+draws.json
+screens/
+*.bak
+*.log
+.env
