@@ -39,3 +39,14 @@ html[data-game="539"] #mres{color:#fdba74}html[data-game="ca"] #mres{color:#93c5
 html[data-game="lotto"] #game{border:2px solid #facc15;background:#422006;color:#fff}html[data-game="super"] #game{border:2px solid #f472b6;background:#500724;color:#fff}
 html[data-game="lotto"] #mres{color:#fde68a}html[data-game="super"] #mres{color:#fbcfe8}
 .splabel{font-size:12px;color:#cbd5e1;margin-left:4px}
+/* ---- 計算區塊配色 ---- */
+.secs>section.sec{--c:#64748b;--bg:#1e293b;border:1px solid var(--c);border-left:6px solid var(--c);border-radius:10px;padding:4px 12px 10px;margin:12px 0;background:linear-gradient(90deg,var(--bg),transparent 70%)}
+.secs>section.sec>h2:first-child{display:table;margin:8px 0 8px;padding:4px 12px;border-radius:12px;background:var(--c);color:#fff;font-size:15px}
+.sec-bao{--c:#0d9488!important;--bg:#042f2ecc!important}
+.sec-col{--c:#6366f1!important;--bg:#1e1b4bcc!important}
+.sec-car{--c:#65a30d!important;--bg:#1a2e05cc!important}
+.sec-prize{--c:#0891b2!important;--bg:#083344cc!important}
+html .secs>section.sec-draw{--c:#ea580c;--bg:#431407cc}
+html[data-game="lotto"] .secs>section.sec-draw{--c:#ca8a04;--bg:#422006cc}html[data-game="super"] .secs>section.sec-draw{--c:#be185d;--bg:#500724cc}
+html[data-game="ca"] .secs>section.sec-draw{--c:#1d4ed8;--bg:#172554cc}html[data-game="hk"] .secs>section.sec-draw{--c:#7e22ce;--bg:#3b0764cc}
+html.lay-d .secs{gap:0 16px}

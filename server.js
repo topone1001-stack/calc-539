@@ -33,7 +33,7 @@ app.get('/style.css',(q,s)=>s.sendFile(P('style.css')));
 const DRAWBOX='<details id="live" class="drawbox" open><summary><b>📺 開獎直播（全民i彩券）</b> <span class="note">週一至週六 20:30</span></summary><div id="livebox"></div></details><div id="draws" class="drawbox"><p class="note">載入開獎資料中…</p></div>';
 const CALC=fs.readFileSync(P('calc.html'),'utf8');
 app.get('/',auth,(q,s)=>{const i=CALC.indexOf('<h2>'),e=CALC.lastIndexOf('</div></div><script');const parts=CALC.slice(i,e).split(/(?=<h2>)/);
- let body=parts.map((p,k)=>q.u.perms.includes(ALL[k])?'<section>'+p+'</section>':'').join('');body=body&&'<div class="secs">'+body+'</div>';if(!body)body='<p>此帳號尚未開通任何功能，請聯絡管理員。</p>';
+ let body=parts.map((p,k)=>q.u.perms.includes(ALL[k])?'<section class="sec sec-'+ALL[k]+'">'+p+'</section>':'').join('');body=body&&'<div class="secs">'+body+'</div>';if(!body)body='<p>此帳號尚未開通任何功能，請聯絡管理員。</p>';
  s.type('html').send(CALC.slice(0,i)+'<div class="tops">'+DRAWBOX+'</div>'+body+CALC.slice(e));});
 app.get('/calc.js',auth,(q,s)=>s.sendFile(P('calc.js')));
 app.get('/draws',auth,(q,s)=>s.set('Cache-Control','no-store').json(DR.get()));
