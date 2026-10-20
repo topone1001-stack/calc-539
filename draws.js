@@ -47,3 +47,4 @@ async function refreshOther(){try{const m=tpe().toISOString().slice(0,7),o={};
 exports.refreshOther=refreshOther;
 exports.start=()=>{refreshOther();setInterval(refreshOther,5*60e3);refreshHK();setInterval(tickHK,10*60e3);refreshCA();setInterval(tickCA,10*60e3);cache=S.get('draws')||cache;videos();setInterval(videos,15*60e3);last=Date.now();refresh();setInterval(tick,10*60e3);};
 exports.get=()=>cache;
+exports.refreshAll=async()=>{await Promise.allSettled([refresh(),refreshCA(),refreshHK(),refreshOther(),videos()]);return cache;};

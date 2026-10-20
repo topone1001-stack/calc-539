@@ -7,3 +7,4 @@ screens/
 *.bak
 *.log
 .env
+.cron_token

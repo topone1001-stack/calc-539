@@ -60,6 +60,13 @@ app.post('/api/share/:g',auth,can('share'),jchk,(q,s)=>{const g=q.params.g;if(!G
  const sh=S.get('shares')||{},k=nextKey(g);sh[g]=sh[g]||{};for(const kk of Object.keys(sh[g]))if(kk!==k)delete sh[g][kk];sh[g][k]=sh[g][k]||{};if(sh[g][k][q.session.user])return s.status(409).json({error:'本期已分享過'});
  sh[g][k][q.session.user]=nums;S.set('shares',sh);oplog(q,'熱門分享',q.session.user,g+' '+k+'：'+nums.join(' '));s.json({ok:true});});
 app.get('/api/other',auth,can('other'),(q,s)=>s.json(DR.get().other||{}));
+
+// ---- 外部排程喚醒（GitHub Actions）：帶 X-Cron-Token 呼叫 ----
+let cronLast=null;
+app.all('/cron',async(q,s)=>{const tk=process.env.CRON_TOKEN||'',got=q.get('X-Cron-Token')||'';if(!tk||got.length!==tk.length||!crypto.timingSafeEqual(Buffer.from(got),Buffer.from(tk)))return s.status(403).json({error:'forbidden'});
+ const t0=Date.now();await DR.refreshAll();const added=await HI.syncRecent();cronLast={at:new Date().toISOString(),added,ms:Date.now()-t0};
+ const st=S.get('cronlog')||[];st.unshift(cronLast);S.set('cronlog',st.slice(0,50)).catch(()=>{});s.json({ok:true,...cronLast,counts:Object.fromEntries(GK.map(g=>[g,HI.data(g).total]))});});
+app.get('/api/cron-log',auth,admin,(q,s)=>s.json(S.get('cronlog')||[]));
 app.get('/me',auth,(q,s)=>s.json({user:q.session.user,role:q.u.role,perms:q.u.perms,sets:q.u.perms.includes('mynum')?q.u.sets:[]}));
 // ---- 後台：管理員／代理（多層）----
 const ROLES={admin:'管理員',agent:'代理',user:'會員'};
