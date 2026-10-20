@@ -15,15 +15,15 @@ document.querySelectorAll('input').forEach(i=>i.oninput=calc);drawCols();
 // ---- 開獎結果（台灣彩券官方資料，由伺服器快取）----
 let LAST=null;const pad=n=>String(n).padStart(2,'0'),balls=(a,hit=[],sp)=>a.map(n=>`<span class="ball${hit.includes(n)?' hit':''}">${pad(n)}</span>`).join('')+(sp!=null?`<span class="ball sp">${pad(sp)}</span>`:'');
 function mine(){const el=document.getElementById('mine');if(!el)return[];return [...new Set((el.value.match(/\d+/g)||[]).map(Number).filter(n=>n>=1&&n<=39))];}
-function drawBox(d){const b=document.getElementById('draws');if(!b)return;const L=d.d539[0];LAST=L;if(!L){b.innerHTML='<p class="note">暫時取不到開獎資料</p>';return;}
- const m=mine(),hit=L.nums.filter(n=>m.includes(n)),lo=d.lotto&&d.lotto[0];
+function drawBox(d){const b=document.getElementById('draws');if(!b)return;const L=d.d539[0];const gs=document.getElementById('game');LAST=gs&&gs.value==='ca'?(d.ca&&d.ca.latest):L;if(!L){b.innerHTML='<p class="note">暫時取不到開獎資料</p>';return;}
+ const gm=document.getElementById('game'),is539=!gm||gm.value==='539',m=mine(),hit=is539?L.nums.filter(n=>m.includes(n)):[],lo=d.lotto&&d.lotto[0];
  b.innerHTML=`<b>今彩539 最新開獎</b>　第 ${L.period} 期　${L.date}<div>${balls(L.nums,hit)}</div>`+
  (lo?`<div style="margin-top:6px"><b>大樂透</b>　第 ${lo.period} 期　${lo.date}<div>${balls(lo.nums,[],lo.special)}</div></div>`:'')+
  `<details><summary>539 近期開獎</summary><table class="hist">${d.d539.map(x=>`<tr><td>${x.period}</td><td>${x.date}</td><td>${x.nums.map(pad).join(' ')}</td></tr>`).join('')}</table></details>`+
- `<p class="note">資料來源：台灣彩券官方網站｜更新：${d.updated?new Date(d.updated).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'}):'—'}</p>`;}
+ `<p class="note">資料來源：台灣彩券官方網站｜更新：${d.updated?new Date(d.updated).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'}):'—'}</p>`;caBox(d.ca,is539?[]:m);}
 let DD=null;function loadDraws(){fetch('/draws').then(r=>r.json()).then(d=>{DD=d;drawBox(d);markMine();});}
 function markMine(){const el=document.getElementById('mine'),out=document.getElementById('mres');if(!el||!LAST)return;const m=mine();if(!m.length){out.textContent='';return;}
- const hit=LAST.nums.filter(n=>m.includes(n));out.textContent=`對照第 ${LAST.period} 期：中 ${hit.length} 顆（${hit.map(pad).join(' ')||'無'}）`;
+ const hit=LAST.nums.filter(n=>m.includes(n));out.textContent=`對照${(document.getElementById("game")||{}).value==="ca"?"加州天天樂":"539"} 第 ${LAST.period} 期：中 ${hit.length} 顆（${hit.map(pad).join(' ')||'無'}）`;
  const h=document.getElementById('hit');if(h){h.value=hit.length;}const p=document.getElementById('pick');if(p&&m.length&&+p.value<m.length){p.value=m.length;}calc();if(DD)drawBox(DD);}
 {const el=document.getElementById('mine');if(el)el.oninput=markMine;}
 setInterval(()=>loadDraws(),5*60e3);
@@ -37,3 +37,13 @@ function drawLive(force){const b=document.getElementById('livebox');if(!b)return
  <a class="vbtn" href="#" id="lsw">${live?'改看最新重播':'改看直播'}</a><a class="vbtn" target="_blank" rel="noopener" href="https://www.youtube.com/@48ilottery48/streams">YouTube 頻道</a><a class="vbtn" target="_blank" rel="noopener" href="https://www.youtube.com/playlist?list=${YT_PL}">開獎直播清單</a>`;
  document.getElementById('lsw').onclick=e=>{e.preventDefault();drawLive(!liveMode);};}
 {const _l=loadDraws;let first=true;loadDraws=function(){fetch('/draws').then(r=>r.json()).then(d=>{DD=d;drawBox(d);markMine();const w=liveWindow();if(first||w!==window._lw){first=false;window._lw=w;drawLive();}});};loadDraws();}
+
+// ---- 加州天天樂 ----
+function caBox(c,m){let b=document.getElementById('cabox');const d=document.getElementById('draws');if(!d)return;if(!b){b=document.createElement('div');b.id='cabox';b.className='drawbox';d.after(b);}
+ if(!c||!c.latest){b.innerHTML='<b>加州天天樂</b><p class="note">暫時取不到開獎資料</p>';return;}const L=c.latest,usd=n=>n==null?'—':'US$'+Number(n).toLocaleString('en-US');
+ b.innerHTML=`<b>加州天天樂 (Fantasy 5) 最新開獎</b>　第 ${L.period} 期　${L.date}<div>${balls(L.nums,L.nums.filter(n=>m.includes(n)))}</div>`+
+ (c.next?`<p>下期 第 ${c.next.period} 期（${c.next.date}）頭獎估計：<b class="tot" style="font-size:18px">${usd(c.next.jackpot)}</b></p>`:'')+
+ `<details><summary>獎金表（第 ${L.period} 期）</summary><table class="prz"><tr><th>中獎</th><th>注數</th><th>每注</th></tr>${c.prizes.map(p=>`<tr><td>${p.desc.replace(/Matched (\d) of 5 numbers/,'中 $1 個')}</td><td>${Number(p.count).toLocaleString()}</td><td>${usd(p.amount)}</td></tr>`).join('')}</table></details>`+
+ `<details><summary>近 20 期開獎</summary><table class="hist">${c.hist.map(x=>`<tr><td>${x.period}</td><td>${x.date}</td><td>${x.nums.map(pad).join(' ')}</td></tr>`).join('')}</table></details>`+
+ `<p class="note">📺 開獎時間台北約 09:30（11/1 起約 10:30），電腦亂數開獎無直播｜<a target="_blank" rel="noopener" href="https://www.calottery.com/draw-games/fantasy-5" style="color:#60a5fa">官方網站</a>｜資料來源：California Lottery｜更新：${new Date(c.updated).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'})}</p>`;}
+{const g=document.getElementById('game');if(g)g.onchange=()=>{if(DD)drawBox(DD);markMine();};}

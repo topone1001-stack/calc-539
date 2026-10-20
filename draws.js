@@ -8,7 +8,7 @@ async function get(kind,key){let out=[];for(const m of months()){const r=await f
  return out.sort((a,b)=>b.period-a.period);}
 async function refresh(){try{
  const a=await get('Daily539Result','daily539Res'),b=await get('Lotto649Result','lotto649Res');
- cache={replay:cache.replay,updated:new Date().toISOString(),
+ cache={replay:cache.replay,ca:cache.ca,updated:new Date().toISOString(),
   d539:a.slice(0,20).map(x=>({period:x.period,date:x.lotteryDate.slice(0,10),nums:x.drawNumberSize})),
   lotto:b.slice(0,10).map(x=>({period:x.period,date:x.lotteryDate.slice(0,10),nums:x.drawNumberSize.slice(0,6).sort((p,q)=>p-q),special:x.drawNumberSize[6]}))};
  save();console.log('draws updated',cache.d539[0]&&cache.d539[0].period);}catch(e){console.error('draws fetch failed:',e.message);}}
@@ -18,5 +18,15 @@ const CH='UCX9q-HI41sFuh1Gs5X_ZZCw';let vid={};
 async function videos(){try{const x=await (await fetch('https://www.youtube.com/feeds/videos.xml?channel_id='+CH,{signal:AbortSignal.timeout(15000)})).text();
  const es=[...x.matchAll(/<entry>[\s\S]*?<yt:videoId>([^<]+)<\/yt:videoId>[\s\S]*?<title>([^<]+)<\/title>/g)].map(m=>({id:m[1],title:m[2]}));
  const r=es.find(e=>/彩券開獎/.test(e.title)&&!/發票/.test(e.title));if(r){vid=r;cache.replay=r;save();}}catch(e){console.error('yt rss failed:',e.message);}}
-exports.start=()=>{cache=S.get('draws')||cache;videos();setInterval(videos,15*60e3);last=Date.now();refresh();setInterval(tick,10*60e3);};
+// 加州天天樂 Fantasy 5：California Lottery 官方 API
+const CA='https://www.calottery.com/api/DrawGameApi/DrawGamePastDrawResults/10/1/20';let caLast=0;
+const caNums=d=>Object.values(d.WinningNumbers||{}).map(x=>+x.Number).sort((a,b)=>a-b);
+async function refreshCA(){caLast=Date.now();try{const r=await fetch(CA,{headers:{'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36','Accept':'application/json'},signal:AbortSignal.timeout(20000)});
+ if(!r.ok)throw new Error('HTTP '+r.status);const d=await r.json();const m=d.MostRecentDraw;
+ const map=x=>({period:x.DrawNumber,date:String(x.DrawDate).slice(0,10),nums:caNums(x)});
+ const seen=new Set(),hist=[m,...(d.PreviousDraws||[])].map(map).filter(x=>x.nums.length===5&&!seen.has(x.period)&&seen.add(x.period)).slice(0,20);
+ cache.ca={updated:new Date().toISOString(),latest:hist[0],hist,prizes:Object.values(m.Prizes||{}).map(p=>({desc:p.PrizeTypeDescription,count:p.Count,amount:p.Amount})),
+  next:d.NextDraw?{period:d.NextDraw.DrawNumber,date:String(d.NextDraw.DrawDate).slice(0,10),jackpot:d.NextDraw.JackpotAmount}:null};save();console.log('ca updated',hist[0]&&hist[0].period);}catch(e){console.error('ca fetch failed:',e.message);}}
+function tickCA(){const d=tpe(),hm=d.getUTCHours()*60+d.getUTCMinutes();if((hm>=9*60+30&&hm<=11*60+30)||Date.now()-caLast>=60*60e3-30e3)refreshCA();}
+exports.start=()=>{refreshCA();setInterval(tickCA,10*60e3);cache=S.get('draws')||cache;videos();setInterval(videos,15*60e3);last=Date.now();refresh();setInterval(tick,10*60e3);};
 exports.get=()=>cache;
