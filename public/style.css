@@ -18,3 +18,24 @@ html.lay-d .secs{display:grid;grid-template-columns:1fr 1fr;gap:0 24px}
 html.lay-d .secs>section{min-width:0}
 html.lay-d .tops{display:grid;grid-template-columns:1fr 1fr;gap:0 16px;align-items:start}
 html.lay-d .u{display:inline-block;vertical-align:top;width:calc(50% - 8px);margin-right:8px}
+/* ---- 遊戲配色：539 紅橘 / 加州 藍 / 六合彩 綠 ---- */
+.gb{display:inline-block;padding:2px 9px;border-radius:10px;font-size:12px;font-weight:700;color:#fff;vertical-align:middle}
+.g539{border:1px solid #f97316!important;border-left:6px solid #ea580c!important;background:linear-gradient(90deg,#431407aa,transparent 60%)}
+.g539 .gb{background:#dc2626}.g539 .ball{background:#fb923c;color:#1c0a00}.g539 .ball.sp{background:#dc2626;color:#fff}
+.g539 .hist td{border-color:#7c2d12}.g539 summary{color:#fdba74}
+.gca{border:1px solid #3b82f6!important;border-left:6px solid #1d4ed8!important;background:linear-gradient(90deg,#172554aa,transparent 60%)}
+.gca .gb{background:#2563eb}.gca .ball{background:#60a5fa;color:#0b1a33}.gca .hist td,.gca .prz td,.gca .prz th{border-color:#1e3a8a}.gca summary{color:#93c5fd}
+.ghk{border:1px solid #a855f7!important;border-left:6px solid #7e22ce!important;background:linear-gradient(90deg,#3b0764aa,transparent 60%)}
+.ghk .gb{background:#9333ea}.ghk .ball{background:#c084fc;color:#1e0533}.ghk .ball.sp{background:#facc15;color:#1c1400}.ghk .hist td{border-color:#581c87}.ghk summary{color:#d8b4fe}
+.ball.hit{background:#22c55e!important;color:#052e16!important;outline:3px solid #fff}
+html[data-game="539"] #game{border:2px solid #f97316;background:#431407;color:#fff}
+html[data-game="ca"] #game{border:2px solid #3b82f6;background:#172554;color:#fff}
+html[data-game="hk"] #game{border:2px solid #a855f7;background:#3b0764;color:#fff}
+html[data-game="539"] #mres{color:#fdba74}html[data-game="ca"] #mres{color:#93c5fd}html[data-game="hk"] #mres{color:#d8b4fe}
+.glo{border:1px solid #facc15!important;border-left:6px solid #ca8a04!important;background:linear-gradient(90deg,#422006aa,transparent 60%)}
+.glo .gb{background:#a16207}.glo .ball{background:#fde047;color:#1c1400}.glo .ball.sp{background:#dc2626;color:#fff}.glo .hist td{border-color:#713f12}.glo summary{color:#fde68a}
+.gsu{border:1px solid #f472b6!important;border-left:6px solid #be185d!important;background:linear-gradient(90deg,#500724aa,transparent 60%)}
+.gsu .gb{background:#be185d}.gsu .ball{background:#f9a8d4;color:#3b0019}.gsu .ball.sp{background:#e11d48;color:#fff}.gsu .hist td{border-color:#831843}.gsu summary{color:#fbcfe8}
+html[data-game="lotto"] #game{border:2px solid #facc15;background:#422006;color:#fff}html[data-game="super"] #game{border:2px solid #f472b6;background:#500724;color:#fff}
+html[data-game="lotto"] #mres{color:#fde68a}html[data-game="super"] #mres{color:#fbcfe8}
+.splabel{font-size:12px;color:#cbd5e1;margin-left:4px}
