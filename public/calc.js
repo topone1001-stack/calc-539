@@ -45,7 +45,7 @@ function caBox(c,m){let b=document.getElementById('cabox');const d=document.getE
  
  `<details><summary>獎金表（第 ${L.period} 期）</summary><table class="prz"><tr><th>中獎</th><th>注數</th><th>每注</th></tr>${c.prizes.map(p=>`<tr><td>${p.desc.replace(/Matched (\d) of 5 numbers/,'中 $1 個')}</td><td>${Number(p.count).toLocaleString()}</td><td>${usd(p.amount)}</td></tr>`).join('')}</table></details>`+
  `<details><summary>近 20 期開獎</summary><table class="hist">${c.hist.map(x=>`<tr><td>${x.period}</td><td>${x.date}</td><td>${x.nums.map(pad).join(' ')}</td></tr>`).join('')}</table></details>`+
- `<p class="note">📺 開獎時間台北約 09:30（11/1 起約 10:30），電腦亂數開獎無直播｜<a target="_blank" rel="noopener" href="https://www.calottery.com/draw-games/fantasy-5" style="color:#60a5fa">官方網站</a>｜資料來源：California Lottery｜更新：${new Date(c.updated).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'})}</p>`;}
+ `<p class="note">📺 開獎時間台北約 09:30（11/1 起約 10:30）｜號碼以官方網站公布為準｜<a target="_blank" rel="noopener" href="https://www.calottery.com/draw-games/fantasy-5" style="color:#60a5fa">官方網站</a>｜資料來源：California Lottery｜更新：${new Date(c.updated).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'})}</p>`;}
 {const g=document.getElementById('game');if(g)g.onchange=()=>{if(DD)drawBox(DD);markMine();};}
 
 function gameTheme(){const g=document.getElementById('game');document.documentElement.dataset.game=g?g.value:'539';}
@@ -68,9 +68,9 @@ function drawBox(d){const old=document.getElementById('draws');if(!old)return;ol
  panel('lotto',d,'','每週二、五 20:30 開獎（同上直播）');
  panel('super',d,'','每週一、四 20:30 開獎（同上直播）');
  const c=d.ca;panel('ca',d,c?`<details><summary>獎金表</summary><table class="prz"><tr><th>中獎</th><th>注數</th><th>每注</th></tr>${(c.prizes||[]).map(p=>`<tr><td>${p.desc.replace(/Matched (\d) of 5 numbers/,'中 $1 個')}</td><td>${fmt(p.count)}</td><td>US$${fmt(p.amount)}</td></tr>`).join('')}</table></details>`:'',
-  '📺 開獎時間台北約 09:30（11/1 起約 10:30），電腦亂數開獎無直播｜<a target="_blank" rel="noopener" href="https://www.calottery.com/draw-games/fantasy-5" style="color:#60a5fa">官方網站</a>');
+  '📺 開獎時間台北約 09:30（11/1 起約 10:30）｜號碼以官方網站公布為準｜<a target="_blank" rel="noopener" href="https://www.calottery.com/draw-games/fantasy-5" style="color:#60a5fa">官方網站</a>');
  const h=d.hk;panel('hk',d,h?`<p class="note">投注額 HK$${fmt(h.turnover)}${h.latest&&h.latest.snowball?'｜'+h.latest.snowball:''}</p><details><summary>派彩表</summary><table class="prz"><tr><th>獎項</th><th>中獎注數</th><th>每注派彩</th></tr>${(h.prizes||[]).map(p=>`<tr><td>${p.name}</td><td>${fmt(p.units)}</td><td>HK$${fmt(p.dividend)}</td></tr>`).join('')}</table></details>`:'',
-  '📺 開獎：每週二、四、六或日 21:30（香港＝台北時間），官方無可嵌入直播｜<a target="_blank" rel="noopener" href="https://bet.hkjc.com/ch/marksix/results" style="color:#d8b4fe">馬會官方結果</a>');
+  '📺 開獎：每週二、四、六或日 21:30（香港＝台北時間）｜號碼以官方網站公布為準｜<a target="_blank" rel="noopener" href="https://bet.hkjc.com/ch/marksix/results" style="color:#d8b4fe">馬會官方結果</a>');
  const cb=document.getElementById('cabox');if(cb)cb.remove();
  LAST=gameData(curGame(),d).latest||null;}
 function caBox(){}
