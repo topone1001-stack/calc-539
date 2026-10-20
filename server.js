@@ -27,13 +27,14 @@ app.post('/login',rateLimit({windowMs:15*60e3,limit:10,handler:(q,s)=>s.redirect
  if(ok&&u)return q.session.regenerate(()=>{q.session.user=name;s.redirect('/');});
  s.redirect('/login?e=1');});
 app.post('/logout',(q,s)=>q.session.destroy(()=>{s.clearCookie('calc.sid');s.redirect('/login');}));
+app.get('/layout.js',(q,s)=>s.sendFile(P('layout.js')));
 app.get('/style.css',(q,s)=>s.sendFile(P('style.css')));
 // server-side feature gating: strip sections the user lacks
 const DRAWBOX='<details id="live" class="drawbox" open><summary><b>📺 開獎直播（全民i彩券）</b> <span class="note">週一至週六 20:30</span></summary><div id="livebox"></div></details><div id="draws" class="drawbox"><p class="note">載入開獎資料中…</p></div>';
 const CALC=fs.readFileSync(P('calc.html'),'utf8');
 app.get('/',auth,(q,s)=>{const i=CALC.indexOf('<h2>'),e=CALC.lastIndexOf('</div></div><script');const parts=CALC.slice(i,e).split(/(?=<h2>)/);
- let body=parts.map((p,k)=>q.u.perms.includes(ALL[k])?p:'').join('');if(!body)body='<p>此帳號尚未開通任何功能，請聯絡管理員。</p>';
- s.type('html').send(CALC.slice(0,i)+DRAWBOX+body+CALC.slice(e));});
+ let body=parts.map((p,k)=>q.u.perms.includes(ALL[k])?'<section>'+p+'</section>':'').join('');body=body&&'<div class="secs">'+body+'</div>';if(!body)body='<p>此帳號尚未開通任何功能，請聯絡管理員。</p>';
+ s.type('html').send(CALC.slice(0,i)+'<div class="tops">'+DRAWBOX+'</div>'+body+CALC.slice(e));});
 app.get('/calc.js',auth,(q,s)=>s.sendFile(P('calc.js')));
 app.get('/draws',auth,(q,s)=>s.set('Cache-Control','no-store').json(DR.get()));
 app.get('/me',auth,(q,s)=>s.json({user:q.session.user,role:q.u.role,perms:q.u.perms}));
@@ -46,7 +47,7 @@ const page=(q,msg)=>{const t=csrf(q),us=U.load(),td=today();const F=(a,inner,cls
   <div class="row">${F('reset',H+`<input type="password" name="password" placeholder="新密碼（至少8字）" minlength="8" required autocomplete="new-password"><button>重設密碼</button>`)}
   ${F('toggle',H+`<button>${u.enabled?'停用':'啟用'}</button>`)}
   ${F('delete',H+`<button class="del" onclick="return confirm('確定刪除 ${esc(n)}？')">刪除</button>`)}</div></div>`;}).join('');
- return `<!doctype html><html lang="zh-TW"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>管理後台</title><link rel="stylesheet" href="/style.css"><style>
+ return `<!doctype html><html lang="zh-TW"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>管理後台</title><link rel="stylesheet" href="/style.css"><script src="/layout.js"></script><style>
 body{display:block}.wrap{display:block;max-width:860px;margin:0 auto;padding:12px}.u{border:1px solid #334155;border-radius:10px;padding:10px;margin:10px 0}.h{margin-bottom:6px}.b{font-size:12px;padding:2px 8px;border-radius:9px;background:#334155}.on{background:#166534}.off{background:#991b1b}
 form{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0}.row{display:flex;flex-wrap:wrap;gap:6px}.ck{display:flex;gap:4px;align-items:center;margin:0;white-space:nowrap}.ck input[type=checkbox]{width:auto;margin:0}input,select{margin:0;padding:7px;width:auto}button{padding:7px 12px;border-radius:7px;border:0;background:#2563eb;color:#fff;cursor:pointer}.del{background:#b91c1c}.msg{background:#1e3a8a;padding:8px;border-radius:8px}.note{color:#94a3b8;font-size:12px}a{color:#60a5fa}</style></head><body><div class="wrap">
 <p><a href="/">← 回計算器</a></p><h1>管理後台</h1>${msg?`<p class="msg">${esc(msg)}</p>`:''}

@@ -8,3 +8,13 @@ h1{font-size:22px;margin-bottom:16px;text-align:center}input{width:100%;padding:
 .keys{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.keys button{height:64px;font-size:24px;border:0;border-radius:14px;background:#334155;color:#fff;cursor:pointer;transition:.1s}.keys button:active{transform:scale(.95)}
 .keys .op{background:#4f46e5}.keys .fn{background:#475569}.keys .eq{background:#22c55e}.hist{flex:1 1 240px;max-width:420px}.hist ul{list-style:none;max-height:360px;overflow:auto}.hist li{padding:10px;border-bottom:1px solid #334155;cursor:pointer;text-align:right}.hist li small{display:block;color:#94a3b8}
 @media(max-width:480px){.keys button{height:72px}}
+/* ---- 版面切換 ---- */
+#laybtn{position:fixed;right:10px;bottom:10px;z-index:99;padding:8px 12px;border:1px solid #475569;border-radius:20px;background:#1e293b;color:#e2e8f0;font-size:13px;box-shadow:0 2px 8px #0008;cursor:pointer;width:auto}
+html.lay-m .wrap{max-width:480px!important;margin:0 auto!important}
+html.lay-m .secs{display:block}
+html.lay-d body{min-width:1100px}
+html.lay-d .wrap{max-width:1200px!important}
+html.lay-d .secs{display:grid;grid-template-columns:1fr 1fr;gap:0 24px}
+html.lay-d .secs>section{min-width:0}
+html.lay-d .tops{display:grid;grid-template-columns:1fr 1fr;gap:0 16px;align-items:start}
+html.lay-d .u{display:inline-block;vertical-align:top;width:calc(50% - 8px);margin-right:8px}

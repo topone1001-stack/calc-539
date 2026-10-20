@@ -1,4 +1,4 @@
-<!doctype html><html lang="zh-TW"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>登入 - 計算機</title><link rel="stylesheet" href="/style.css"></head><body>
+<!doctype html><html lang="zh-TW"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>登入 - 計算機</title><link rel="stylesheet" href="/style.css"><script src="/layout.js"></script></head><body>
 <form class="card" method="post" action="/login"><h1>🔐 計算機登入</h1><div class="err" id="e"></div>
 <label>帳號<input name="username" autocomplete="username" required autofocus></label><label>密碼<input name="password" type="password" autocomplete="current-password" required></label><button class="btn">登入</button></form>
 <script>const e=new URLSearchParams(location.search).get('e');if(e)document.getElementById('e').textContent=e==='rate'?'嘗試次數過多，請 15 分鐘後再試':e==='off'?'帳號已停用或已過期':'帳號或密碼錯誤';</script></body></html>
