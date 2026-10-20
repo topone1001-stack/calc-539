@@ -19,12 +19,12 @@ async function hkRange(v){const r=await fetch('https://info.cld.hkjc.com/graphql
 async function caPage(p){const r=await fetch(`https://www.calottery.com/api/DrawGameApi/DrawGamePastDrawResults/10/${p}/20`,{headers:{'User-Agent':UA,Accept:'application/json'},signal:AbortSignal.timeout(20000)});const d=await r.json();if(!d)return [];
  return [d.MostRecentDraw,...(d.PreviousDraws||[])].filter(x=>x&&x.WinningNumbers&&Object.keys(x.WinningNumbers).length===5).map(x=>({period:x.DrawNumber,date:String(x.DrawDate).slice(0,10),nums:Object.values(x.WinningNumbers).map(n=>+n.Number).sort((a,b)=>a-b),special:null}));}
 const months=(from)=>{const out=[];let [y,m]=from.split('-').map(Number);const now=new Date(Date.now()+8*3600e3),ey=now.getUTCFullYear(),em=now.getUTCMonth()+1;while(y<ey||(y===ey&&m<=em)){out.push(`${y}-${String(m).padStart(2,'0')}`);m++;if(m>12){m=1;y++;}}return out;};
-let importing=false,status={};exports.status=()=>({importing,status});
+let importing=false,status={};exports.status=()=>({importing,status});exports.importing=()=>importing;
 async function fullImport(){if(!pool()||importing)return;importing=true;const done=S.get('histDone')||{};const cur=months('2000-01').slice(-2);
- try{for(const g of ['539','lotto','super']){let added=0;for(const m of months(GAMES[g].from)){const k=g+':'+m;if(done[k]&&!cur.includes(m))continue;try{added+=await put(g,await twMonth(g,m));if(!cur.includes(m))done[k]=1;}catch(e){console.error('import',k,e.message);}await sleep(150);}status[g]={added,at:new Date().toISOString()};await S.set('histDone',done);}
+ try{for(const g of ['539','lotto','super']){let added=0;for(const m of months(GAMES[g].from)){const k=g+':'+m;if(done[k]&&!cur.includes(m))continue;try{added+=await put(g,await twMonth(g,m));if(!cur.includes(m))done[k]=1;}catch(e){console.error('import',k,e.message);}if(m.endsWith('-12'))await S.set('histDone',done);await sleep(150);}status[g]={added,at:new Date().toISOString()};await S.set('histDone',done);await load();}
   // 六合彩：每 3 個月一段
   {let added=0;const now=new Date();for(let y=1993;y<=now.getUTCFullYear();y++)for(const [a,b] of [['0101','0331'],['0401','0630'],['0701','0930'],['1001','1231']]){const k=`hk:${y}${a}`;const isCur=y===now.getUTCFullYear();if(done[k]&&!isCur)continue;if(new Date(`${y}-${a.slice(0,2)}-${a.slice(2)}`)>now)continue;
-    try{added+=await put('hk',await hkRange({startDate:y+a,endDate:y+b}));if(!isCur)done[k]=1;}catch(e){console.error('import',k,e.message);}await sleep(300);}status.hk={added};await S.set('histDone',done);}
+    try{added+=await put('hk',await hkRange({startDate:y+a,endDate:y+b}));if(!isCur)done[k]=1;}catch(e){console.error('import',k,e.message);}await sleep(300);}status.hk={added};await S.set('histDone',done);await load();}
   // 加州：官方 API 只提供近約 180 期，之後逐日累積
   {let added=0;for(let p=1;p<=12;p++){try{const r=await caPage(p);if(!r.length)break;added+=await put('ca',r);}catch(e){console.error('ca page',p,e.message);break;}await sleep(500);}status.ca={added};}
  }finally{importing=false;await load();console.log('hist import done',JSON.stringify(status));}}

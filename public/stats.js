@@ -16,10 +16,11 @@ $('tosend').onclick=()=>SEL.size&&send('draw');$('tobao').onclick=()=>SEL.size&&
 // ---- 範圍 ----
 function applyRange(){const v=$('rng').value;$('dr').style.display=v==='d'?'':'none';let rows=D.rows;
  if(v==='d'){const a=$('d1').value,b=$('d2').value;rows=rows.filter(r=>(!a||r[1]>=a)&&(!b||r[1]<=b));}else if(+v)rows=rows.slice(-v);R=rows;
- $('info').textContent=`${GM[D.g].name}：資料庫共 ${fmt(D.total)} 期（${D.first||'—'} ～ ${D.last||'—'}），目前分析 ${fmt(R.length)} 期`;render();}
+ $('info').textContent=`${GM[D.g].name}：資料庫共 ${fmt(D.total)} 期（${D.first||'—'} ～ ${D.last||'—'}），目前分析 ${fmt(R.length)} 期`+(D.importing?'（其他遊戲仍在匯入中）':'');render();}
 ['rng','d1','d2'].forEach(i=>$(i).onchange=applyRange);
 async function load(){const g=$('g').value;document.documentElement.style.setProperty('--gc',GM[g].c);document.documentElement.style.setProperty('--gb',GM[g].b);$('info').textContent='載入中…';
- D=await api('/api/hist/'+g);SEL.clear();tray();if(!D.total){$('info').textContent='資料匯入中，請稍後再試（首次需數分鐘）';$('panes').querySelectorAll('.pane').forEach(p=>p.innerHTML='');return;}applyRange();}
+ D=await api('/api/hist/'+g);SEL.clear();tray();if(!D.total){$('info').textContent='⏳ 正在從官方匯入完整歷史資料（首次約 5 分鐘），完成後本頁會自動更新…';$('panes').querySelectorAll('.pane').forEach(p=>p.innerHTML='');setTimeout(()=>{if($('g').value===g)load();},20000);return;}
+ if(D.importing)$('info').dataset.imp=1;applyRange();}
 $('g').onchange=load;
 let tab=localStorage.getItem('stats.tab')||'';
 function render(){const p=$('pane-'+tab);if(!p)return;({hist:rHist,num:rNum,trend:rTrend,adv:rAdv,share:rShare,sand:rSand,mine:rMine,other:rOther})[tab](p);tray();}
