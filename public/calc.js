@@ -1,5 +1,5 @@
 const _D={value:'0',textContent:'',innerHTML:'',append(){},set onclick(x){}},$=i=>document.getElementById(i)||_D,v=i=>Math.max(0,parseFloat($(i).value)||0),f=n=>Math.round(n).toLocaleString('zh-TW');
-fetch('/me').then(r=>r.json()).then(d=>{$('who').textContent='👤 '+d.user;if(d.role==='admin'){const a=document.createElement('a');a.href='/admin';a.textContent=' ⚙️ 後台';a.style.color='#60a5fa';$('who').append(a);}});
+fetch('/me').then(r=>r.json()).then(d=>{$('who').textContent='👤 '+d.user;if(d.role==='admin'||d.role==='agent'){const a=document.createElement('a');a.href='/admin';a.textContent=' ⚙️ 後台';a.style.color='#60a5fa';$('who').append(a);}});
 function C(n,k){n=Math.floor(n);if(k>n)return 0;let r=1;for(let i=0;i<k;i++)r=r*(n-i)/(i+1);return Math.round(r);}
 // 立柱: 從 k 個不同柱各取 1 號 → 柱大小的 k 次初等對稱多項式
 function E(a,k){let e=[1];for(const x of a){const n=e.slice();n.push(0);for(let j=e.length;j>0;j--)n[j]=(n[j]||0)+e[j-1]*x;e=n;}return e[k]||0;}
@@ -31,8 +31,8 @@ setInterval(()=>loadDraws(),5*60e3);
 const YT_CH='UCX9q-HI41sFuh1Gs5X_ZZCw',YT_PL='PLkPNE4sIKVw9_RAzjrgBhmp0S2YNsVnSH';let liveMode=null;
 function liveWindow(){const t=new Date(Date.now()+8*3600e3),d=t.getUTCDay(),m=t.getUTCHours()*60+t.getUTCMinutes();if(!(d>=1&&d<=6&&m>=20*60+25&&m<=20*60+45))return false;const td=t.toISOString().slice(0,10);return !(DD&&DD.d539&&DD.d539[0]&&DD.d539[0].date===td);}
 function drawLive(force){const b=document.getElementById('livebox');if(!b)return;const live=force!=null?force:liveWindow();const rp=DD&&DD.replay;liveMode=live;
- const src=live?`https://www.youtube.com/embed/live_stream?channel=${YT_CH}&autoplay=0`:(rp?`https://www.youtube.com/embed/${rp.id}`:`https://www.youtube.com/embed/videoseries?list=${YT_PL}`);
- b.innerHTML=`<p class="note">${live?'🔴 直播時段（20:25–20:45，開獎結果出來即切回重播）：顯示目前直播（若尚未開始會顯示待播畫面）':'目前非直播時段，顯示最新開獎重播'+(rp?'：'+rp.title:'')}</p>
+ const src=live?`https://www.youtube.com/embed/live_stream?channel=${YT_CH}&autoplay=0`:(rp?`https://www.youtube.com/embed/${rp.id}?start=${rp.start||0}`:`https://www.youtube.com/embed/videoseries?list=${YT_PL}`);
+ b.innerHTML=`<p class="note">${live?'🔴 直播時段（20:25–20:45，開獎結果出來即切回重播）：顯示目前直播（若尚未開始會顯示待播畫面）':'目前非直播時段，顯示最新開獎重播'+(rp?'：'+rp.title+(rp.start?`（已跳到 20:30 開播，片頭略過 ${Math.floor(rp.start/60)} 分 ${rp.start%60} 秒）`:''):'')}</p>
  <div class="vw"><iframe src="${src}" title="開獎直播" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe></div>
  <a class="vbtn" href="#" id="lsw">${live?'改看最新重播':'改看直播'}</a><a class="vbtn" target="_blank" rel="noopener" href="https://www.youtube.com/@48ilottery48/streams">YouTube 頻道</a><a class="vbtn" target="_blank" rel="noopener" href="https://www.youtube.com/playlist?list=${YT_PL}">開獎直播清單</a>`;
  document.getElementById('lsw').onclick=e=>{e.preventDefault();drawLive(!liveMode);};}
@@ -45,7 +45,7 @@ function caBox(c,m){let b=document.getElementById('cabox');const d=document.getE
  
  `<details><summary>獎金表（第 ${L.period} 期）</summary><table class="prz"><tr><th>中獎</th><th>注數</th><th>每注</th></tr>${c.prizes.map(p=>`<tr><td>${p.desc.replace(/Matched (\d) of 5 numbers/,'中 $1 個')}</td><td>${Number(p.count).toLocaleString()}</td><td>${usd(p.amount)}</td></tr>`).join('')}</table></details>`+
  `<details><summary>近 20 期開獎</summary><table class="hist">${c.hist.map(x=>`<tr><td>${x.period}</td><td>${x.date}</td><td>${x.nums.map(pad).join(' ')}</td></tr>`).join('')}</table></details>`+
- `<p class="note">📺 開獎時間台北約 09:30（11/1 起約 10:30）｜號碼以官方網站公布為準｜<a target="_blank" rel="noopener" href="https://www.calottery.com/draw-games/fantasy-5" style="color:#60a5fa">官方網站</a>｜資料來源：California Lottery｜更新：${new Date(c.updated).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'})}</p>`;}
+ `<p class="note">📺 開獎時間台北約 09:30（11/1 起約 10:30）｜號碼以官方網站公布為準｜<a target="_blank" rel="noopener" href="https://www.calottery.com/zh-tw/draw-games/fantasy-5" style="color:#60a5fa">官方網站</a>｜資料來源：California Lottery｜更新：${new Date(c.updated).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'})}</p>`;}
 {const g=document.getElementById('game');if(g)g.onchange=()=>{if(DD)drawBox(DD);markMine();};}
 
 function gameTheme(){const g=document.getElementById('game');document.documentElement.dataset.game=g?g.value:'539';}
@@ -68,7 +68,7 @@ function drawBox(d){const old=document.getElementById('draws');if(!old)return;ol
  panel('lotto',d,'','每週二、五 20:30 開獎（同上直播）｜號碼以官方網站公布為準｜<a target="_blank" rel="noopener" href="https://www.taiwanlottery.com/" style="color:#fdba74">台灣彩券官網</a>');
  panel('super',d,'','每週一、四 20:30 開獎（同上直播）｜號碼以官方網站公布為準｜<a target="_blank" rel="noopener" href="https://www.taiwanlottery.com/" style="color:#fdba74">台灣彩券官網</a>');
  const c=d.ca;panel('ca',d,c?`<details><summary>獎金表</summary><table class="prz"><tr><th>中獎</th><th>注數</th><th>每注</th></tr>${(c.prizes||[]).map(p=>`<tr><td>${p.desc.replace(/Matched (\d) of 5 numbers/,'中 $1 個')}</td><td>${fmt(p.count)}</td><td>US$${fmt(p.amount)}</td></tr>`).join('')}</table></details>`:'',
-  '📺 開獎時間台北約 09:30（11/1 起約 10:30）｜號碼以官方網站公布為準｜<a target="_blank" rel="noopener" href="https://www.calottery.com/draw-games/fantasy-5" style="color:#60a5fa">官方網站</a>');
+  '📺 開獎時間台北約 09:30（11/1 起約 10:30）｜號碼以官方網站公布為準｜<a target="_blank" rel="noopener" href="https://www.calottery.com/zh-tw/draw-games/fantasy-5" style="color:#60a5fa">官方網站</a>');
  const h=d.hk;panel('hk',d,h?`<p class="note">投注額 HK$${fmt(h.turnover)}${h.latest&&h.latest.snowball?'｜'+h.latest.snowball:''}</p><details><summary>派彩表</summary><table class="prz"><tr><th>獎項</th><th>中獎注數</th><th>每注派彩</th></tr>${(h.prizes||[]).map(p=>`<tr><td>${p.name}</td><td>${fmt(p.units)}</td><td>HK$${fmt(p.dividend)}</td></tr>`).join('')}</table></details>`:'',
   '📺 開獎：每週二、四、六或日 21:30（香港＝台北時間）｜號碼以官方網站公布為準｜<a target="_blank" rel="noopener" href="https://bet.hkjc.com/ch/marksix/results" style="color:#d8b4fe">馬會官方結果</a>');
  const cb=document.getElementById('cabox');if(cb)cb.remove();
@@ -79,3 +79,23 @@ function markMine(){const el=document.getElementById('mine'),out=document.getEle
  out.textContent=`對照${GAMES[k].name} 第 ${LAST.period} 期：中 ${hit.length} 顆（${hit.map(pad).join(' ')||'無'}）`+(sp?`＋${GAMES[k].sp} ${pad(LAST.special)}`:'');
  const hh=document.getElementById('hit');if(hh)hh.value=Math.min(5,hit.length);const p=document.getElementById('pick');if(p&&+p.value<m.length)p.value=m.length;calc();if(DD)drawBox(DD);}
 {const g=document.getElementById('game');if(g)g.onchange=()=>{gameTheme();if(DD)drawBox(DD);markMine();};}
+// ---- 頂部：統計連結、開獎倒數、我的號碼對獎、接收統計頁選號 ----
+(function(){const t=document.querySelector('.tops');if(!t)return;const bar=document.createElement('div');bar.id='topbar';t.before(bar);
+ bar.innerHTML='<div class="drawbox" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><a href="/stats" class="btn" style="width:auto;padding:8px 14px;text-decoration:none">📊 統計分析／歷史／我的號碼</a><span id="cd" style="font-size:14px"></span></div><div id="myck"></div>';
+ const TPE=8*3600e3;function laOffset(d){const s=d.toLocaleString('en-US',{timeZone:'America/Los_Angeles',hour12:false});return new Date(s+' UTC').getTime()-d.getTime();}
+ function nextTW(days){const now=Date.now();for(let i=0;i<8;i++){const d=new Date(now+TPE+i*864e5);const t=Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate(),20,30)-TPE;if(days.includes(new Date(t+TPE).getUTCDay())&&t>now-15*60e3)return t;}}
+ function nextCA(){const now=Date.now();for(let i=0;i<3;i++){const d=new Date(now+i*864e5),o=laOffset(d),la=new Date(now+o+i*864e5);let t=Date.UTC(la.getUTCFullYear(),la.getUTCMonth(),la.getUTCDate(),18,30)-o;if(t>now-15*60e3)return t;}}
+ const G=[['今彩539',()=>nextTW([1,2,3,4,5,6]),'#fb923c'],['大樂透',()=>nextTW([2,5]),'#fde047'],['威力彩',()=>nextTW([1,4]),'#f9a8d4'],['加州天天樂',nextCA,'#60a5fa']];
+ const fmtT=ms=>{if(ms<=0)return '開獎中';const h=Math.floor(ms/36e5),m=Math.floor(ms%36e5/6e4),s=Math.floor(ms%6e4/1e3);return (h?h+'時':'')+String(m).padStart(2,'0')+'分'+String(s).padStart(2,'0')+'秒';};
+ function tick(){const now=Date.now();document.getElementById('cd').innerHTML='⏰ '+G.map(([n,f,c])=>{const t=f();return t?`<span style="color:${c}">${n} ${fmtT(t-now)}</span>`:'';}).join('｜')+'<span class="note">｜六合彩依馬會公布</span>';}
+ tick();setInterval(tick,1000);
+ // 開獎時段加快更新
+ setInterval(()=>{const d=new Date(Date.now()+TPE),m=d.getUTCHours()*60+d.getUTCMinutes();if((m>=20*60+30&&m<=21*60)||(m>=9*60+25&&m<=11*60))loadDraws();},30e3);
+ fetch('/me').then(r=>r.json()).then(me=>{if(!me.sets||!me.sets.length)return;const K={'539':'d539',lotto:'lotto',super:'super'};const chk=()=>{if(!DD)return setTimeout(chk,800);
+  const h=me.sets.filter(s=>s.nums&&s.nums.length).map((s,i)=>{const L=K[s.game]?DD[K[s.game]]&&DD[K[s.game]][0]:DD[s.game]&&DD[s.game].latest;if(!L)return '';const hit=L.nums.filter(n=>s.nums.includes(n));
+   return `<div>⭐ ${s.name||('第'+(i+1)+'組')}（${GAMES[s.game].name} 第 ${L.period} 期）：中 <b>${hit.length}</b> 顆 ${balls(hit,hit)}${L.special!=null&&s.nums.includes(L.special)?'＋'+GAMES[s.game].sp:''}</div>`;}).join('');
+  document.getElementById('myck').innerHTML=h?`<div class="drawbox" style="border-left:6px solid #22c55e">${h}</div>`:'';};chk();});
+ const pk=localStorage.getItem('calc.picks');if(pk){localStorage.removeItem('calc.picks');try{const x=JSON.parse(pk);const g=document.getElementById('game');if(g&&[...g.options].some(o=>o.value===x.game)){g.value=x.game;gameTheme();}
+  const mi=document.getElementById('mine');if(mi){mi.value=x.nums.join(' ');}const p=document.getElementById('pick');if(p){p.value=x.nums.length;}
+  const go=()=>{if(!DD)return setTimeout(go,500);markMine();calc();const sec=document.querySelector(x.to==='bao'?'.sec-bao':'.sec-draw');if(sec)sec.scrollIntoView({behavior:'smooth'});};go();}catch(e){}}
+})();

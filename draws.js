@@ -8,7 +8,7 @@ async function get(kind,key){let out=[];for(const m of months()){const r=await f
  return out.sort((a,b)=>b.period-a.period);}
 async function refresh(){try{
  const a=await get('Daily539Result','daily539Res'),b=await get('Lotto649Result','lotto649Res'),c=await get('SuperLotto638Result','superLotto638Res');
- cache={replay:cache.replay,ca:cache.ca,hk:cache.hk,updated:new Date().toISOString(),
+ cache={replay:cache.replay,ca:cache.ca,hk:cache.hk,other:cache.other,updated:new Date().toISOString(),
   d539:a.slice(0,20).map(x=>({period:x.period,date:x.lotteryDate.slice(0,10),nums:x.drawNumberSize})),
   super:c.slice(0,20).map(x=>({period:x.period,date:x.lotteryDate.slice(0,10),nums:x.drawNumberSize.slice(0,6).sort((p,q)=>p-q),special:x.drawNumberSize[6]})),lotto:b.slice(0,20).map(x=>({period:x.period,date:x.lotteryDate.slice(0,10),nums:x.drawNumberSize.slice(0,6).sort((p,q)=>p-q),special:x.drawNumberSize[6]}))};
  save();console.log('draws updated',cache.d539[0]&&cache.d539[0].period);}catch(e){console.error('draws fetch failed:',e.message);}}
@@ -17,7 +17,9 @@ let last=0;function tick(){const d=tpe(),dow=d.getUTCDay(),hm=d.getUTCHours()*60
 const CH='UCX9q-HI41sFuh1Gs5X_ZZCw';let vid={};
 async function videos(){try{const x=await (await fetch('https://www.youtube.com/feeds/videos.xml?channel_id='+CH,{signal:AbortSignal.timeout(15000)})).text();
  const es=[...x.matchAll(/<entry>[\s\S]*?<yt:videoId>([^<]+)<\/yt:videoId>[\s\S]*?<title>([^<]+)<\/title>/g)].map(m=>({id:m[1],title:m[2]}));
- const r=es.find(e=>/彩券開獎/.test(e.title)&&!/發票/.test(e.title));if(r){vid=r;cache.replay=r;save();}}catch(e){console.error('yt rss failed:',e.message);}}
+ const r=es.find(e=>/彩券開獎/.test(e.title)&&!/發票/.test(e.title));if(r){try{const w=await (await fetch('https://www.youtube.com/watch?v='+r.id,{headers:{'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36','Accept-Language':'zh-TW'},signal:AbortSignal.timeout(15000)})).text();
+  const st=(w.match(/"liveBroadcastDetails":\{[^}]*"startTimestamp":"([^"]+)"/)||[])[1];if(st){const t0=new Date(st),d=new Date(t0.getTime()+8*3600e3);const show=Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate(),12,30,0);r.start=Math.max(0,Math.round((show-t0.getTime())/1000));r.liveStart=st;}}catch(e){}
+  if(r.start==null)r.start=120;vid=r;cache.replay=r;save();}}catch(e){console.error('yt rss failed:',e.message);}}
 // 加州天天樂 Fantasy 5：California Lottery 官方 API
 const CA='https://www.calottery.com/api/DrawGameApi/DrawGamePastDrawResults/10/1/20';let caLast=0;
 const caNums=d=>Object.values(d.WinningNumbers||{}).map(x=>+x.Number).sort((a,b)=>a-b);
@@ -37,5 +39,11 @@ async function refreshHK(){hkLast=Date.now();try{const r=await fetch('https://in
  const L=d.find(x=>x.drawResult&&x.drawResult.drawnNo&&x.drawResult.drawnNo.length===6),pool=L&&L.lotteryPool||{};
  cache.hk={updated:new Date().toISOString(),latest:hist[0],hist:hist.slice(0,20),turnover:pool.totalInvestment,jackpotCarry:pool.jackpot,prizes:(pool.lotteryPrizes||[]).map(p=>({name:HKP[p.type-1]||('第'+p.type+'獎'),units:p.winningUnit,dividend:p.dividend}))};save();console.log('hk updated',hist[0]&&hist[0].period);}catch(e){console.error('hk fetch failed:',e.message);}}
 function tickHK(){const d=tpe(),hm=d.getUTCHours()*60+d.getUTCMinutes();if((hm>=21*60+15&&hm<=22*60+30)||Date.now()-hkLast>=60*60e3-30e3)refreshHK();}
-exports.start=()=>{refreshHK();setInterval(tickHK,10*60e3);refreshCA();setInterval(tickCA,10*60e3);cache=S.get('draws')||cache;videos();setInterval(videos,15*60e3);last=Date.now();refresh();setInterval(tick,10*60e3);};
+async function refreshOther(){try{const m=tpe().toISOString().slice(0,7),o={};
+ for(const [k,ep,key] of [['d3','3DResult','lotto3DRes'],['d4','4DResult','lotto4DRes']]){const j=await (await fetch(`${API}${ep}?period&month=${m}&pageNum=1&pageSize=10`,{signal:AbortSignal.timeout(15000)})).json();o[k]=(j.content[key]||[]).sort((a,b)=>b.period-a.period).slice(0,10).map(x=>({period:x.period,date:x.lotteryDate.slice(0,10),nums:x.drawNumberAppear}));}
+ const day=tpe().toISOString().slice(0,10);const j=await (await fetch(`${API}BingoResult?openDate=${day}&pageNum=1&pageSize=10`,{signal:AbortSignal.timeout(15000)})).json();
+ o.bingo=((j.content&&j.content.bingoQueryResult)||[]).slice(0,10).map(x=>({period:x.drawTerm,nums:(x.bigShowOrder||[]).map(Number).sort((a,b)=>a-b),super:x.bullEyeTop!=null&&x.bullEyeTop!=='－'?+x.bullEyeTop:null}));
+ o.updated=new Date().toISOString();cache.other=o;save();}catch(e){console.error('other fetch failed:',e.message);}}
+exports.refreshOther=refreshOther;
+exports.start=()=>{refreshOther();setInterval(refreshOther,5*60e3);refreshHK();setInterval(tickHK,10*60e3);refreshCA();setInterval(tickCA,10*60e3);cache=S.get('draws')||cache;videos();setInterval(videos,15*60e3);last=Date.now();refresh();setInterval(tick,10*60e3);};
 exports.get=()=>cache;

@@ -1,0 +1,19 @@
+<!doctype html><html lang="zh-TW"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>開獎統計分析</title><link rel="stylesheet" href="/style.css"><script src="/layout.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>body{display:block}.wrap{display:block;max-width:980px;margin:0 auto;padding:10px}.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0}.bar select,.bar input{width:auto;margin:0;padding:7px}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}.tabs button{padding:8px 12px;border-radius:18px;border:1px solid #475569;background:#1e293b;color:#e2e8f0;cursor:pointer;width:auto}.tabs button.on{background:var(--gc,#ea580c);border-color:var(--gc,#ea580c);color:#fff}
+.pane{display:none}.pane.on{display:block}.card2{border:1px solid var(--gc,#ea580c);border-left:6px solid var(--gc,#ea580c);border-radius:10px;padding:10px;margin:10px 0;background:#0f172a99}.card2 h3{margin:2px 0 8px;font-size:16px}
+table{width:100%;border-collapse:collapse}td,th{border:1px solid #334155;padding:5px;text-align:center;font-size:13px}th{background:#0f172a}.ball{display:inline-block;min-width:26px;padding:3px 0;margin:1px;border-radius:50%;background:var(--gb,#fb923c);color:#111;font-weight:700;text-align:center;font-size:13px}.ball.sp{background:#dc2626;color:#fff}.ball.sel{outline:3px solid #fff;background:#22c55e}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(38px,1fr));gap:4px}.grid button{padding:7px 0;border-radius:8px;border:1px solid #475569;background:#1e293b;color:#e2e8f0;cursor:pointer;width:auto}.grid button.sel{background:#22c55e;color:#052e16;font-weight:700}
+.tray{position:sticky;top:0;z-index:5;background:#0b1220ee;border:1px solid #334155;border-radius:10px;padding:6px 8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}.tray button,.btn2{padding:6px 10px;border-radius:8px;border:0;background:#2563eb;color:#fff;cursor:pointer;width:auto}.btn2.g{background:#475569}
+.note{font-size:12px;color:#94a3b8}.heat td{padding:0;width:18px;height:16px;font-size:10px}.chip{display:inline-block;margin:2px;padding:3px 8px;border-radius:12px;background:#334155;cursor:pointer}.chip b{color:#fbbf24}
+#sand{position:relative;height:260px;border-radius:12px;overflow:hidden;background:radial-gradient(circle at 50% 40%,#3b2f1a,#1a140a);border:1px solid #a16207}#sand span{position:absolute;font-weight:800;color:#fde68a;text-shadow:0 0 6px #000;transition:all 1.2s ease}
+.pg{display:flex;gap:6px;justify-content:center;align-items:center;margin:6px 0}.pg button{width:auto;padding:5px 10px}
+html.lay-d .two{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}</style></head><body><div class="wrap">
+<p><a href="/" style="color:#60a5fa">← 回計算器</a></p><h1>📊 開獎統計分析</h1>
+<div class="bar"><label>遊戲 <select id="g"><option value="539">今彩539</option><option value="lotto">大樂透</option><option value="super">威力彩</option><option value="ca">加州天天樂</option><option value="hk">香港六合彩</option></select></label>
+<label>範圍 <select id="rng"><option value="30">最近 30 期</option><option value="50">最近 50 期</option><option value="100" selected>最近 100 期</option><option value="300">最近 300 期</option><option value="1000">最近 1000 期</option><option value="0">全部</option><option value="d">自訂日期</option></select></label>
+<span id="dr" style="display:none"><input type="date" id="d1"> ～ <input type="date" id="d2"></span></div>
+<p class="note" id="info">載入中…</p>
+<div class="tray" id="tray"><span>已選：</span><span id="trayn" class="note">（點任何號碼加入）</span><button id="tosend">➡️ 送到開獎試算</button><button id="tobao" class="btn2">➡️ 送到包牌</button><button id="toclr" class="btn2 g">清除</button></div>
+<div class="tabs" id="tabs"></div><div id="panes"></div></div><script src="/stats.js"></script></body></html>
