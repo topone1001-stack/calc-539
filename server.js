@@ -1,9 +1,11 @@
 const express=require('express'),session=require('express-session'),bcrypt=require('bcryptjs'),rateLimit=require('express-rate-limit'),crypto=require('crypto'),fs=require('fs'),path=require('path'),U=require('./users');
-const DR=require('./draws');DR.start();
+const DR=require('./draws'),S=require('./store');
+(async()=>{await S.init();DR.start();
 const app=express();app.set('trust proxy',1);
-const SK=path.join(__dirname,'.session_secret');if(!fs.existsSync(SK))fs.writeFileSync(SK,crypto.randomBytes(32).toString('hex'),{mode:0o600});
+if(process.env.SEED_ADMIN_HASH){const us=U.load();if(!Object.values(us).some(u=>u.role==='admin'||!u.role)){us.admin={hash:process.env.SEED_ADMIN_HASH,role:'admin',enabled:true,expires:'',perms:['bao','col','car','prize','draw']};await S.set('users',us);console.log('seeded admin');}}
+let store;if(S.pg()){const PS=require('connect-pg-simple')(session);store=new PS({pool:S.pg(),createTableIfMissing:true});}
 app.use(express.urlencoded({extended:false}));
-app.use(session({secret:fs.readFileSync(SK,'utf8'),resave:false,saveUninitialized:false,name:'calc.sid',cookie:{httpOnly:true,sameSite:'lax',secure:'auto',maxAge:7*864e5}}));
+app.use(session({store,secret:S.get('secret'),resave:false,saveUninitialized:false,name:'calc.sid',cookie:{httpOnly:true,sameSite:'lax',secure:'auto',maxAge:7*864e5}}));
 const FEATS=[['bao','包牌'],['col','立柱'],['car','車'],['prize','獎金'],['draw','開獎試算']];
 const ALL=FEATS.map(f=>f[0]);
 const norm=(name,u)=>({hash:u.hash,role:u.role||(name==='admin'?'admin':'user'),enabled:u.enabled!==false,expires:u.expires||'',perms:Array.isArray(u.perms)?u.perms:ALL.slice()});
@@ -64,3 +66,4 @@ A('delete',(q,us,n)=>{if(!us[n])return '找不到帳號';if(n===q.session.user)r
 A('perms',(q,us,n)=>{if(!us[n])return '找不到帳號';const u=norm(n,us[n]);const role=q.body.role==='admin'?'admin':'user';if(n===q.session.user&&role!=='admin')return '不能移除自己的管理員身分';if(role!=='admin'&&lastAdmin(us,n))return '至少要保留一位管理員';
  Object.assign(u,{perms:arr(q.body.perms),role,expires:date(q.body.expires)});if(n===q.session.user)u.expires='';us[n]=u;return '✓ 已更新 '+n;});
 const port=process.env.PORT||3080;app.listen(port,()=>console.log('listening',port));
+})().catch(e=>{console.error(e);process.exit(1);});
