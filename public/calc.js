@@ -64,9 +64,9 @@ function panel(k,d,extra,note){const G=GAMES[k],x=gameData(k,d),L=x.latest;const
  `<details><summary>近 ${x.hist.length} 期開獎</summary><table class="hist">${x.hist.map(h=>`<tr><td>${h.period}</td><td>${h.date}</td><td>${h.nums.map(pad).join(' ')}${h.special!=null?' ＋'+pad(h.special):''}</td></tr>`).join('')}</table></details>`+
  `<p class="note">${note?note+'｜':''}資料來源：${G.src}${x.updated?'｜更新：'+new Date(x.updated).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'}):''}</p>`;}
 function drawBox(d){const old=document.getElementById('draws');if(!old)return;old.style.display='none';
- panel('539',d,'','每週一至六 20:30 開獎（全民i彩券直播）');
- panel('lotto',d,'','每週二、五 20:30 開獎（同上直播）');
- panel('super',d,'','每週一、四 20:30 開獎（同上直播）');
+ panel('539',d,'','每週一至六 20:30 開獎（全民i彩券直播）｜號碼以官方網站公布為準｜<a target="_blank" rel="noopener" href="https://www.taiwanlottery.com/" style="color:#fdba74">台灣彩券官網</a>');
+ panel('lotto',d,'','每週二、五 20:30 開獎（同上直播）｜號碼以官方網站公布為準｜<a target="_blank" rel="noopener" href="https://www.taiwanlottery.com/" style="color:#fdba74">台灣彩券官網</a>');
+ panel('super',d,'','每週一、四 20:30 開獎（同上直播）｜號碼以官方網站公布為準｜<a target="_blank" rel="noopener" href="https://www.taiwanlottery.com/" style="color:#fdba74">台灣彩券官網</a>');
  const c=d.ca;panel('ca',d,c?`<details><summary>獎金表</summary><table class="prz"><tr><th>中獎</th><th>注數</th><th>每注</th></tr>${(c.prizes||[]).map(p=>`<tr><td>${p.desc.replace(/Matched (\d) of 5 numbers/,'中 $1 個')}</td><td>${fmt(p.count)}</td><td>US$${fmt(p.amount)}</td></tr>`).join('')}</table></details>`:'',
   '📺 開獎時間台北約 09:30（11/1 起約 10:30）｜號碼以官方網站公布為準｜<a target="_blank" rel="noopener" href="https://www.calottery.com/draw-games/fantasy-5" style="color:#60a5fa">官方網站</a>');
  const h=d.hk;panel('hk',d,h?`<p class="note">投注額 HK$${fmt(h.turnover)}${h.latest&&h.latest.snowball?'｜'+h.latest.snowball:''}</p><details><summary>派彩表</summary><table class="prz"><tr><th>獎項</th><th>中獎注數</th><th>每注派彩</th></tr>${(h.prizes||[]).map(p=>`<tr><td>${p.name}</td><td>${fmt(p.units)}</td><td>HK$${fmt(p.dividend)}</td></tr>`).join('')}</table></details>`:'',
