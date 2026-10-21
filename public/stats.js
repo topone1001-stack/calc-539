@@ -1,5 +1,5 @@
 // 開獎統計分析（資料由伺服器預先整理，前端依範圍即時計算）
-const $=i=>document.getElementById(i),pad=n=>String(n).padStart(2,'0'),fmt=n=>Number(n).toLocaleString('zh-TW');
+const H=x=>String(x==null?'':x).replace(/[&<>"'`]/g,c=>'&#'+c.charCodeAt(0)+';'),$=i=>document.getElementById(i),pad=n=>String(n).padStart(2,'0'),fmt=n=>Number(n).toLocaleString('zh-TW');
 const GM={'539':{name:'今彩539',c:'#ea580c',b:'#fb923c'},lotto:{name:'大樂透',c:'#ca8a04',b:'#fde047'},super:{name:'威力彩',c:'#be185d',b:'#f9a8d4'},ca:{name:'加州天天樂',c:'#1d4ed8',b:'#60a5fa'},hk:{name:'香港六合彩',c:'#7e22ce',b:'#c084fc'}};
 let ME={},D=null,R=[],SEL=new Set(),charts={},CSRF='';
 const TABS=[['hist','📜 歷史／查詢','hist'],['num','🔢 號碼統計','stats'],['trend','📈 走勢','stats'],['adv','🧪 進階分析','adv'],['share','🔥 熱門分享','share'],['sand','🎲 沙盤浮字','fun'],['mine','⭐ 我的號碼','mynum'],['other','🎰 3星/4星/Bingo','other']];
@@ -28,7 +28,7 @@ function render(){const p=$('pane-'+tab);if(!p)return;({hist:rHist,num:rNum,tren
 let hp=0,hdesc=true,hball=true,hq='';
 function rHist(p){let rows=R.slice();if(hq){const nums=(hq.match(/\d+/g)||[]).map(Number);rows=rows.filter(r=>r[0].includes(hq)||r[1].includes(hq)||(nums.length&&nums.every(n=>r[2].includes(n)||r[3]===n)));}
  if(hdesc)rows.reverse();const per=20,pages=Math.max(1,Math.ceil(rows.length/per));hp=Math.min(hp,pages-1);const pg=rows.slice(hp*per,hp*per+per);
- p.innerHTML=`<div class="card2"><h3>快速查詢</h3><div class="bar"><input id="hq" placeholder="期別、日期(2026-10)、或號碼(例 5 12)" value="${hq}" style="flex:1;min-width:200px"><button class="btn2" id="hsort">${hdesc?'新→舊':'舊→新'}</button><button class="btn2 g" id="hview">${hball?'球號':'文字'}</button></div>
+ p.innerHTML=`<div class="card2"><h3>快速查詢</h3><div class="bar"><input id="hq" placeholder="期別、日期(2026-10)、或號碼(例 5 12)" value="${H(hq)}" style="flex:1;min-width:200px"><button class="btn2" id="hsort">${hdesc?'新→舊':'舊→新'}</button><button class="btn2 g" id="hview">${hball?'球號':'文字'}</button></div>
  <p class="note">找到 ${fmt(rows.length)} 期。查號碼＝同時包含這些號碼的期數；點號碼加入選號。</p>
  <table><tr><th>期別</th><th>日期</th><th>開獎號碼</th><th></th></tr>${pg.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td style="text-align:left">${hball?r[2].map(n=>ball(n)).join('')+(r[3]!=null?ball(r[3],1):''):r[2].map(pad).join(' ')+(r[3]!=null?' ＋'+pad(r[3]):'')}</td><td><button class="btn2 g" data-use="${r[2].join(',')}">用這組</button></td></tr>`).join('')}</table>
  <div class="pg"><button class="btn2 g" id="hp0">«</button><button class="btn2 g" id="hpp">‹</button><span>${hp+1} / ${pages}</span><button class="btn2 g" id="hpn">›</button><button class="btn2 g" id="hpl">»</button></div></div>`;
@@ -66,7 +66,7 @@ function rAdv(p){const mx=D.max,s=stat();const m3=new Map();for(const r of R){co
  const f=(advF.match(/\d+/g)||[]).map(Number);let top=[...m3.entries()].filter(([k])=>{const t=[Math.floor(k/10000),Math.floor(k/100)%100,k%100];return f.every(n=>t.includes(n));}).sort((a,b)=>b[1]-a[1]).slice(0,30);
  const L30=R.slice(-30),c30=Array(mx+1).fill(0);L30.forEach(r=>r[2].forEach(n=>c30[n]++));const base=D.n/mx;
  const score=nums(mx).map(n=>{const fr=s.N?s.cnt[n]/s.N:0,rec=L30.length?c30[n]/L30.length:0,gap=Math.min(1,s.cur[n]/(mx/D.n*3));return {n,v:(fr*0.4+rec*0.4)/base*50+gap*20};}).sort((a,b)=>b.v-a.v);
- p.innerHTML=`<div class="card2"><h3>三星組合開出次數（同一期出現的 3 碼組合）</h3><div class="bar"><input id="af" placeholder="篩選：必含號碼，例 7 或 7 15" value="${advF}"><span class="note">範圍內共 ${fmt(m3.size)} 種組合出現過</span></div>
+ p.innerHTML=`<div class="card2"><h3>三星組合開出次數（同一期出現的 3 碼組合）</h3><div class="bar"><input id="af" placeholder="篩選：必含號碼，例 7 或 7 15" value="${H(advF)}"><span class="note">範圍內共 ${fmt(m3.size)} 種組合出現過</span></div>
  <div>${top.map(([k,c])=>{const t=[Math.floor(k/10000),Math.floor(k/100)%100,k%100];return `<span class="chip" data-use="${t.join(',')}">${t.map(pad).join('-')} <b>${c}</b></span>`;}).join('')||'<span class="note">無</span>'}</div></div>
  <div class="card2"><h3>下期機率分析　<span class="note" style="color:#fbbf24">⚠️ 統計參考，非預測；每期開獎都是獨立隨機</span></h3><p class="note">分數＝範圍內頻率 40%＋最近 30 期頻率 40%＋未開期數 20%（50 分＝平均）</p>
  <div>${score.slice(0,12).map(x=>`<span class="chip" data-n="${x.n}">${pad(x.n)} <b>${x.v.toFixed(0)}</b></span>`).join('')}</div><button class="btn2" id="usetop" style="margin-top:6px">把前 ${D.n} 名加入選號</button>
@@ -93,7 +93,7 @@ function rSand(p){p.innerHTML=`<div class="card2"><h3>🎲 沙盤浮字（娛樂
 async function rMine(p){const x=await api('/api/mysets');const sets=[0,1].map(i=>x.sets[i]||{game:'539',name:'',nums:[]});
  const latest=async g=>{const d=g===D.g?D:await api('/api/hist/'+g);return d.rows[d.rows.length-1];};
  const chk=await Promise.all(sets.map(async s=>{if(!s.nums.length)return '';const L=await latest(s.game);if(!L)return '';const h=L[2].filter(n=>s.nums.includes(n));return `對 ${GM[s.game].name} 第 ${L[0]} 期：中 <b>${h.length}</b> 顆 ${h.map(n=>ball(n)).join('')}${L[3]!=null&&s.nums.includes(L[3])?'＋特別號':''}`;}));
- p.innerHTML=sets.map((s,i)=>`<div class="card2"><h3>第 ${i+1} 組</h3><div class="bar"><select id="mg${i}">${Object.entries(GM).map(([k,v])=>`<option value="${k}" ${s.game===k?'selected':''}>${v.name}</option>`).join('')}</select><input id="mn${i}" placeholder="名稱（選填）" value="${s.name||''}" style="width:140px"><input id="mx${i}" placeholder="號碼，最多 12 個" value="${s.nums.join(' ')}" style="flex:1;min-width:180px"><button class="btn2 g" data-fill="${i}">用已選號碼</button></div><p>${chk[i]||'<span class="note">尚未設定</span>'}</p></div>`).join('')+
+ p.innerHTML=sets.map((s,i)=>`<div class="card2"><h3>第 ${i+1} 組</h3><div class="bar"><select id="mg${i}">${Object.entries(GM).map(([k,v])=>`<option value="${k}" ${s.game===k?'selected':''}>${v.name}</option>`).join('')}</select><input id="mn${i}" placeholder="名稱（選填）" value="${H(s.name)}" style="width:140px"><input id="mx${i}" placeholder="號碼，最多 12 個" value="${s.nums.join(' ')}" style="flex:1;min-width:180px"><button class="btn2 g" data-fill="${i}">用已選號碼</button></div><p>${chk[i]||'<span class="note">尚未設定</span>'}</p></div>`).join('')+
  `<button class="btn2" id="msave">儲存</button> <span id="mmsg" class="note">登入計算器時會自動對獎</span>`;
  p.querySelectorAll('[data-fill]').forEach(b=>b.onclick=()=>{$('mx'+b.dataset.fill).value=[...SEL].sort((a,b)=>a-b).join(' ');});
  $('msave').onclick=async()=>{const r=await post('/api/mysets',{sets:[0,1].map(i=>({game:$('mg'+i).value,name:$('mn'+i).value,nums:($('mx'+i).value.match(/\d+/g)||[]).map(Number)}))});$('mmsg').textContent=r.ok?'✓ 已儲存':'儲存失敗';if(r.ok)rMine(p);};}

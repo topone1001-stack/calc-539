@@ -1,33 +1,51 @@
 const express=require('express'),session=require('express-session'),bcrypt=require('bcryptjs'),rateLimit=require('express-rate-limit'),crypto=require('crypto'),fs=require('fs'),path=require('path'),U=require('./users');
 const DR=require('./draws'),S=require('./store'),HI=require('./hist');
 (async()=>{await S.init();if(!S.get('users')){try{const f=require('path').join(__dirname,'users.json');if(require('fs').existsSync(f)){await S.set('users',JSON.parse(require('fs').readFileSync(f,'utf8')));console.log('users imported from file');}}catch(e){}}DR.start();HI.start().catch(e=>console.error('hist',e.message));
-const app=express();app.set('trust proxy',1);
+const app=express();app.set('trust proxy',1);app.disable('x-powered-by');
+const helmet=require('helmet');
+app.use(helmet({contentSecurityPolicy:{useDefaults:false,directives:{'default-src':["'self'"],'script-src':["'self'","'unsafe-inline'",'https://cdn.jsdelivr.net'],'script-src-attr':["'unsafe-inline'"],'style-src':["'self'","'unsafe-inline'"],
+ 'img-src':["'self'",'data:','https://i.ytimg.com'],'media-src':["'self'"],'connect-src':["'self'"],'font-src':["'self'",'data:'],'frame-src':['https://www.youtube.com','https://www.youtube-nocookie.com'],'object-src':["'none'"],'base-uri':["'self'"],'form-action':["'self'"],'frame-ancestors':["'none'"],...(process.env.NODE_ENV==='production'?{'upgrade-insecure-requests':[]}:{})}},
+ crossOriginEmbedderPolicy:false,referrerPolicy:{policy:'strict-origin-when-cross-origin'},hsts:{maxAge:31536000,includeSubDomains:true}}));
+app.get('/healthz',(q,s)=>s.set('Cache-Control','no-store').type('text').send('ok'));
+const PROD=process.env.NODE_ENV==='production';
 if(process.env.SEED_ADMIN_HASH){const us=U.load();if(!Object.values(us).some(u=>u.role==='admin'||!u.role)){us.admin={hash:process.env.SEED_ADMIN_HASH,role:'admin',enabled:true,expires:'',perms:['bao','col','car','prize','draw']};await S.set('users',us);console.log('seeded admin');}}
 let store;if(S.pg()){const PS=require('connect-pg-simple')(session);store=new PS({pool:S.pg(),createTableIfMissing:true});}
-app.use(require('compression')());app.use(express.urlencoded({extended:false}));app.use(express.json({limit:'20kb'}));
-app.use(session({store,secret:S.get('secret'),resave:false,saveUninitialized:false,name:'calc.sid',cookie:{httpOnly:true,sameSite:'lax',secure:'auto',maxAge:7*864e5}}));
+app.use(require('compression')());app.use(express.urlencoded({extended:false,limit:'20kb',parameterLimit:100}));app.use(express.json({limit:'20kb'}));
+app.use(session({store,secret:S.get('secret'),resave:false,saveUninitialized:false,name:'calc.sid',rolling:true,cookie:{httpOnly:true,sameSite:'lax',secure:PROD?true:'auto',maxAge:4*3600e3}}));
+// 同源檢查：所有寫入要求的 Origin/Referer 必須是本站
+app.use((q,s,n)=>{if(q.method==='GET'||q.method==='HEAD'||q.path==='/cron')return n();const o=q.get('Origin')||q.get('Referer')||'';if(!o)return n();try{if(new URL(o).host===q.get('host'))return n();}catch(e){}susp(q,'跨站寫入被擋',o.slice(0,80));s.status(403).send('403');});
+const apiLimit=rateLimit({windowMs:60e3,limit:150,standardHeaders:true,legacyHeaders:false});app.use(['/api','/draws','/me','/admin','/stats'],apiLimit);
 const FEATS=[['bao','包牌'],['col','立柱'],['car','車'],['prize','獎金'],['draw','開獎試算'],['hist','歷史開獎'],['stats','號碼統計'],['adv','進階分析'],['mynum','我的號碼'],['share','熱門分享'],['fun','沙盤浮字'],['other','3星/4星/Bingo']];
 const ALL=FEATS.map(f=>f[0]);
 const norm=(name,u)=>{const role=u.role||(name==='admin'?'admin':'user');return {hash:u.hash,parent:u.parent||'',created:u.created||'',createdBy:u.createdBy||'',role,enabled:u.enabled!==false,expires:u.expires||'',perms:role==='admin'?ALL.slice():(Array.isArray(u.perms)?u.perms:ALL.slice()),sets:u.sets||[]};};
 const today=()=>new Date(Date.now()+8*3600e3).toISOString().slice(0,10); // Asia/Taipei
 const usable=u=>u&&u.enabled&&(!u.expires||u.expires>=today());
-const getU=n=>{const r=U.load()[n];return r?norm(n,r):null;};
+const susp=(q,act,detail)=>{try{const L=S.get('oplog')||[];L.unshift({t:new Date().toISOString(),by:(q.session&&q.session.user)||'(未登入)',act:'⚠️ '+act,target:'',detail:String(detail||'').slice(0,120),ip:q.ip});S.set('oplog',L.slice(0,1000)).catch(()=>{});}catch(e){}};
+const VALID=n=>typeof n==='string'&&/^[A-Za-z0-9_.\-]{3,32}$/.test(n);
+const getU=n=>{if(!VALID(n))return null;const us=U.load();if(!Object.prototype.hasOwnProperty.call(us,n))return null;const r=us[n];return r&&r.hash?norm(n,r):null;};
 const auth=(q,s,n)=>{const us=U.load(),nm=q.session.user;if(!nm||!us[nm])return q.session.destroy(()=>s.redirect('/login'));const e=eff(us,nm);if(!e.ok)return q.session.destroy(()=>s.redirect('/login'));q.u=e;n();};
 const admin=(q,s,n)=>q.u.role==='admin'?n():s.status(403).send('403 無權限');
 const P=f=>path.join(__dirname,'public',f);
 const esc=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const csrf=q=>q.session.csrf||(q.session.csrf=crypto.randomBytes(24).toString('hex'));
-const chk=(q,s,n)=>{const t=q.body._csrf||'',r=q.session.csrf||'';if(t.length===r.length&&r&&crypto.timingSafeEqual(Buffer.from(t),Buffer.from(r)))return n();s.status(403).send('CSRF 驗證失敗');};
+const chk=(q,s,n)=>{const t=q.body._csrf||'',r=q.session.csrf||'';if(t.length===r.length&&r&&crypto.timingSafeEqual(Buffer.from(t),Buffer.from(r)))return n();susp(q,'CSRF 驗證失敗',q.path);s.status(403).send('CSRF 驗證失敗');};
 app.get('/login',(q,s)=>q.session.user?s.redirect('/'):s.sendFile(P('login.html')));
 const DUMMY=bcrypt.hashSync('x',12);
-app.post('/login',rateLimit({windowMs:15*60e3,limit:10,handler:(q,s)=>s.redirect('/login?e=rate')}),(q,s)=>{
- const name=q.body.username||'',u=getU(name);
+// 暴力破解防護：帳號與 IP 各自累計失敗，5 次後鎖定 1 分鐘並倍增（最多 30 分鐘）
+const BF=new Map();const bfKey=k=>BF.get(k)||{f:0,until:0,lv:0};
+const bfLocked=k=>bfKey(k).until>Date.now();
+function bfFail(q,k){const x=bfKey(k);x.f++;if(x.f>=5){x.lv=Math.min(x.lv+1,6);x.until=Date.now()+Math.min(30,2**(x.lv-1))*60e3;x.f=0;susp(q,'登入鎖定',k+' 鎖 '+Math.min(30,2**(x.lv-1))+' 分');}BF.set(k,x);}
+setInterval(()=>{const t=Date.now();for(const [k,v] of BF)if(v.until<t&&v.f===0&&t-v.until>3600e3)BF.delete(k);},600e3).unref();
+app.post('/login',rateLimit({windowMs:15*60e3,limit:20,handler:(q,s)=>{susp(q,'登入頻率過高','');s.redirect('/login?e=rate');}}),(q,s)=>{
+ const name=typeof q.body.username==='string'?q.body.username.trim():'',u=getU(name);
+ if(bfLocked('ip:'+q.ip)||(VALID(name)&&bfLocked('user:'+name)))return s.redirect('/login?e=rate');
+ if(typeof q.body.password!=='string'||q.body.password.length>200)return s.redirect('/login?e=1');
  const ok=bcrypt.compareSync(q.body.password||'',u?u.hash:DUMMY);
  const LG=S.get('logins')||{};const rec=okk=>{if(!u)return;(LG[name]=LG[name]||[]).unshift({t:new Date().toISOString(),ip:q.ip,ok:okk});LG[name]=LG[name].slice(0,30);S.set('logins',LG).catch(()=>{});};
  if(ok&&u&&!eff(U.load(),name).ok){rec(false);return s.redirect('/login?e=off');}
  if(ok&&u){const us=U.load();us[name]={...us[name],lastLogin:new Date().toISOString(),lastIp:q.ip};U.save(us);rec(true);}else rec(false);
- if(ok&&u)return q.session.regenerate(()=>{q.session.user=name;s.redirect('/');});
- s.redirect('/login?e=1');});
+ if(ok&&u){BF.delete('user:'+name);return q.session.regenerate(()=>{q.session.user=name;q.session.ip=q.ip;s.redirect('/');});}
+ bfFail(q,'ip:'+q.ip);if(VALID(name))bfFail(q,'user:'+name);s.redirect('/login?e=1');});
 app.post('/logout',(q,s)=>q.session.destroy(()=>{s.clearCookie('calc.sid');s.redirect('/login');}));
 app.get(['/tiger.mp4','/tiger.jpg'],(q,s)=>s.sendFile(P(q.path.slice(1)),{maxAge:'7d'}));
 app.get('/layout.js',(q,s)=>s.sendFile(P('layout.js')));
@@ -43,7 +61,7 @@ app.get('/draws',auth,(q,s)=>s.set('Cache-Control','no-store').json(DR.get()));
 
 // ---- 統計／歷史 API ----
 const can=(...f)=>(q,s,n)=>f.some(x=>q.u.perms.includes(x))?n():s.status(403).json({error:'無權限'});
-const jchk=(q,s,n)=>{const t=q.get('X-CSRF')||'',r=q.session.csrf||'';if(r&&t.length===r.length&&crypto.timingSafeEqual(Buffer.from(t),Buffer.from(r)))return n();s.status(403).json({error:'CSRF'});};
+const jchk=(q,s,n)=>{const t=q.get('X-CSRF')||'',r=q.session.csrf||'';if(r&&t.length===r.length&&crypto.timingSafeEqual(Buffer.from(t),Buffer.from(r)))return n();susp(q,'CSRF 驗證失敗',q.path);s.status(403).json({error:'CSRF'});};
 const GK=['539','lotto','super','ca','hk'];
 app.get('/stats',auth,(q,s)=>s.sendFile(P('stats.html')));
 app.get('/stats.js',auth,(q,s)=>s.sendFile(P('stats.js')));
@@ -51,7 +69,7 @@ app.get('/api/hist/:g',auth,can('hist','stats','adv','share','fun'),(q,s)=>{cons
 app.get('/api/hist-status',auth,admin,(q,s)=>s.json({...HI.status(),counts:Object.fromEntries(GK.map(g=>[g,HI.data(g).total]))}));
 app.get('/api/csrf',auth,(q,s)=>s.json({csrf:csrf(q)}));
 app.get('/api/mysets',auth,can('mynum'),(q,s)=>s.json({sets:q.u.sets}));
-app.post('/api/mysets',auth,can('mynum'),jchk,(q,s)=>{const sets=(Array.isArray(q.body.sets)?q.body.sets:[]).slice(0,2).map(x=>({game:GK.includes(x.game)?x.game:'539',name:String(x.name||'').slice(0,20),nums:[...new Set((x.nums||[]).map(Number).filter(n=>n>=1&&n<=49))].slice(0,12)}));
+app.post('/api/mysets',auth,can('mynum'),jchk,(q,s)=>{const sets=(Array.isArray(q.body.sets)?q.body.sets:[]).slice(0,2).map(x=>({game:GK.includes(x.game)?x.game:'539',name:String(x.name||'').replace(/[<>"'&`]/g,'').slice(0,20),nums:[...new Set((x.nums||[]).map(Number).filter(n=>n>=1&&n<=49))].slice(0,12)}));
  const us=U.load();us[q.session.user]={...us[q.session.user],sets};U.save(us);oplog(q,'修改我的號碼',q.session.user,sets.map(x=>x.nums.length+'碼').join('/'));s.json({ok:true,sets});});
 // 彩迷熱門號碼分享：每人每期每遊戲一次，最多 10 碼
 const nextKey=g=>{const d=HI.data(g);const L=d.rows[d.rows.length-1];if(!L)return 'next';if(g==='hk'){const [y,n]=L[0].split('/');return y+'/'+String(+n+1).padStart(3,'0');}return String(+L[0]+1);};
@@ -64,7 +82,7 @@ app.get('/api/other',auth,can('other'),(q,s)=>s.json(DR.get().other||{}));
 
 // ---- 外部排程喚醒（GitHub Actions）：帶 X-Cron-Token 呼叫 ----
 let cronLast=null;
-app.all('/cron',async(q,s)=>{const tk=process.env.CRON_TOKEN||'',got=q.get('X-Cron-Token')||'';if(!tk||got.length!==tk.length||!crypto.timingSafeEqual(Buffer.from(got),Buffer.from(tk)))return s.status(403).json({error:'forbidden'});
+app.all('/cron',async(q,s)=>{const tk=process.env.CRON_TOKEN||'',got=q.get('X-Cron-Token')||'';if(!tk||got.length!==tk.length||!crypto.timingSafeEqual(Buffer.from(got),Buffer.from(tk))){susp(q,'cron 未授權','');return s.status(403).json({error:'forbidden'});}
  const t0=Date.now();await DR.refreshAll();const added=await HI.syncRecent();cronLast={at:new Date().toISOString(),added,ms:Date.now()-t0};
  const st=S.get('cronlog')||[];st.unshift(cronLast);S.set('cronlog',st.slice(0,50)).catch(()=>{});s.json({ok:true,...cronLast,counts:Object.fromEntries(GK.map(g=>[g,HI.data(g).total]))});});
 app.get('/api/cron-log',auth,admin,(q,s)=>s.json(S.get('cronlog')||[]));
@@ -127,7 +145,7 @@ const arr=x=>(Array.isArray(x)?x:x?[x]:[]).filter(k=>ALL.includes(k));
 const date=x=>/^\d{4}-\d{2}-\d{2}$/.test(x||'')?x:'';
 // 每個操作：伺服器端檢查對象是否在自己的下線內
 const A=(name,fn)=>app.post('/admin/'+name,auth,mgr,chk,(q,s)=>{const us=U.load(),n=String(q.body.username||'');
- if(name!=='create'){if(!us[n])return go(q,s,'找不到帳號');if(n===q.session.user)return go(q,s,'不能對自己操作');if(!new Set(visible(q)).has(n))return go(q,s,'無權管理此帳號');}
+ if(name!=='create'){if(!us[n])return go(q,s,'找不到帳號');if(n===q.session.user)return go(q,s,'不能對自己操作');if(!new Set(visible(q)).has(n)){susp(q,'越權操作',name+' → '+n);return go(q,s,'無權管理此帳號');}}
  const r=fn(q,us,n);if(typeof r==='string'&&!r.startsWith('✓'))return go(q,s,r);U.save(us);oplog(q,{create:'新增',reset:'重設密碼',toggle:'停用/啟用',delete:'刪除',perms:'修改設定'}[name],n,r.replace(/^✓\s*/,''));go(q,s,r);});
 const lastAdmin=(us,n)=>norm(n,us[n]).role==='admin'&&Object.keys(us).filter(k=>{const u=norm(k,us[k]);return u.role==='admin'&&u.enabled;}).length<=1;
 // 權限／到期上限＝上線（若為代理）與操作者的有效值
@@ -147,5 +165,7 @@ A('perms',(q,us,n)=>{const isA=q.u.role==='admin';const u=norm(n,us[n]);let role
  if(u.role==='agent'&&role==='user'&&direct(us,n).length)return '此代理還有下線，不能改成會員';if(u.role==='admin'&&role!=='admin'&&lastAdmin(us,n))return '至少要保留一位管理員';
  const L=limits(q,us,us[n].parent);const perms=arr(q.body.perms).filter(k=>L.perms.includes(k)||!isA&&false);const exp=clampExp(date(q.body.expires),L.exp);
  us[n]={...us[n],role,perms,expires:exp,...(role==='admin'?{parent:''}:{})};return `✓ 已更新 ${n}：${ROLES[role]}，到期 ${exp||'無'}，權限 ${perms.length} 項`;});
+app.use((q,s)=>s.status(404).type('text').send('404'));
+app.use((e,q,s,n)=>{console.error('ERR',q.method,q.path,e&&e.message);s.status(e&&e.status&&e.status<500?e.status:500).type('text').send(e&&e.type==='entity.too.large'?'413 內容太大':'發生錯誤，請稍後再試');});
 const port=process.env.PORT||3080;app.listen(port,()=>console.log('listening',port));
 })().catch(e=>{console.error(e);process.exit(1);});

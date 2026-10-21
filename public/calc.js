@@ -93,7 +93,7 @@ function markMine(){const el=document.getElementById('mine'),out=document.getEle
  setInterval(()=>{const d=new Date(Date.now()+TPE),m=d.getUTCHours()*60+d.getUTCMinutes();if((m>=20*60+30&&m<=21*60)||(m>=9*60+25&&m<=11*60))loadDraws();},30e3);
  fetch('/me').then(r=>r.json()).then(me=>{if(!me.sets||!me.sets.length)return;const K={'539':'d539',lotto:'lotto',super:'super'};const chk=()=>{if(!DD)return setTimeout(chk,800);
   const h=me.sets.filter(s=>s.nums&&s.nums.length).map((s,i)=>{const L=K[s.game]?DD[K[s.game]]&&DD[K[s.game]][0]:DD[s.game]&&DD[s.game].latest;if(!L)return '';const hit=L.nums.filter(n=>s.nums.includes(n));
-   return `<div>⭐ ${s.name||('第'+(i+1)+'組')}（${GAMES[s.game].name} 第 ${L.period} 期）：中 <b>${hit.length}</b> 顆 ${balls(hit,hit)}${L.special!=null&&s.nums.includes(L.special)?'＋'+GAMES[s.game].sp:''}</div>`;}).join('');
+   return `<div>⭐ ${String(s.name||('第'+(i+1)+'組')).replace(/[&<>"']/g,'')}（${GAMES[s.game].name} 第 ${L.period} 期）：中 <b>${hit.length}</b> 顆 ${balls(hit,hit)}${L.special!=null&&s.nums.includes(L.special)?'＋'+GAMES[s.game].sp:''}</div>`;}).join('');
   document.getElementById('myck').innerHTML=h?`<div class="drawbox" style="border-left:6px solid #22c55e">${h}</div>`:'';};chk();});
  const pk=localStorage.getItem('calc.picks');if(pk){localStorage.removeItem('calc.picks');try{const x=JSON.parse(pk);const g=document.getElementById('game');if(g&&[...g.options].some(o=>o.value===x.game)){g.value=x.game;gameTheme();}
   const mi=document.getElementById('mine');if(mi){mi.value=x.nums.join(' ');}const p=document.getElementById('pick');if(p){p.value=x.nums.length;}

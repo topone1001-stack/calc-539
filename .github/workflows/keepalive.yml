@@ -1,0 +1,27 @@
+name: 保持網站喚醒
+# 免費 Render 15 分鐘無流量會休眠；這裡定時打 /healthz 讓它 24 小時不睡。
+on:
+  schedule:
+    - cron: '*/5 * * * *'     # 每 5 分鐘短 ping（GitHub 排程可能延遲）
+    - cron: '0 */6 * * *'     # 每 6 小時啟動一次長迴圈，補排程延遲
+  workflow_dispatch: {}
+jobs:
+  ping:
+    if: github.event.schedule != '0 */6 * * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: curl -fsS --retry 3 --retry-delay 20 --max-time 90 https://calc-539.onrender.com/healthz
+  loop:
+    if: github.event.schedule == '0 */6 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    concurrency: { group: keepalive-loop, cancel-in-progress: true }
+    steps:
+      - name: 每 4 分鐘 ping 一次，持續約 5 小時 50 分
+        run: |
+          end=$(( $(date +%s) + 350*60 ))
+          while [ $(date +%s) -lt $end ]; do
+            curl -fsS --max-time 90 -o /dev/null -w "%{http_code} %{time_total}s\n" https://calc-539.onrender.com/healthz || echo fail
+            sleep 240
+          done
