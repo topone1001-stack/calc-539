@@ -1,5 +1,18 @@
-<!doctype html><html lang="zh-TW"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>登入 - 計算機</title><link rel="stylesheet" href="/style.css"><script src="/layout.js"></script></head><body>
-<form class="card" method="post" action="/login"><h1>🔐 計算機登入</h1><div class="err" id="e"></div>
+<!doctype html><html lang="zh-TW"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>登入 - 計算機</title><link rel="preload" as="image" href="/tiger.jpg"><link rel="stylesheet" href="/style.css"><script src="/layout.js"></script><style>
+html,body{min-height:100%}body{display:flex;align-items:flex-end;justify-content:center;min-height:100vh;min-height:100dvh;padding:16px 16px 7vh;box-sizing:border-box;background:#000 url(/tiger.jpg) center/cover no-repeat fixed}
+.bgv{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:-2;background:#000 url(/tiger.jpg) center/cover}
+.bgo{position:fixed;inset:0;z-index:-1;background:radial-gradient(ellipse at 50% 45%,#0006 0%,#000b 70%),linear-gradient(180deg,#000a 0%,#0004 40%,#000c 100%)}
+@media (prefers-reduced-motion:reduce){.bgv{display:none}}
+form.card.royal{position:relative;background:linear-gradient(160deg,#1a1408d9,#0b0b0fd9);backdrop-filter:blur(10px) saturate(1.2);-webkit-backdrop-filter:blur(10px) saturate(1.2);border:1px solid #d4af37aa;box-shadow:0 0 0 1px #00000080,0 0 30px #d4af3733,0 20px 60px #000c;color:#f5e6b8}
+form.card.royal h1{text-align:center;letter-spacing:4px;font-size:26px;margin:0 0 4px;background:linear-gradient(180deg,#fff3c4,#d4af37 55%,#8a6a1c);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:0 2px 10px #d4af3740}
+form.card.royal .sub{text-align:center;color:#c9a94e;font-size:13px;letter-spacing:6px;margin:0 0 16px}
+form.card.royal label{color:#e9d9a6}form.card.royal input:not([type=checkbox]){background:#0008;border:1px solid #8a6a1c;color:#fff7dc}form.card.royal input:focus{outline:none;border-color:#f3d26b;box-shadow:0 0 0 3px #d4af3740}
+form.card.royal input[type=checkbox]{accent-color:#d4af37}
+form.card.royal .btn{background:linear-gradient(180deg,#f3d26b,#b8860b);color:#1a1205;font-weight:800;letter-spacing:4px;border:1px solid #fff3c480;box-shadow:0 6px 20px #b8860b55}form.card.royal .btn:hover{filter:brightness(1.08)}
+form.card.royal .err{color:#fca5a5}
+form.card.royal::before{content:"";position:absolute;inset:6px;border:1px solid #d4af3740;border-radius:16px;pointer-events:none}
+</style></head><body><video class="bgv" id="bgv" autoplay muted loop playsinline preload="auto" poster="/tiger.jpg" aria-hidden="true"><source src="/tiger.mp4" type="video/mp4"></video><div class="bgo"></div>
+<form class="card royal" method="post" action="/login"><h1>👑 王者風範</h1><p class="sub">會員登入</p><div class="err" id="e"></div>
 <label>帳號<input name="username" autocomplete="username" required autofocus></label><label>密碼<input name="password" type="password" autocomplete="current-password" required></label><label style="display:flex;gap:6px;align-items:center;margin:4px 0 10px"><input type="checkbox" id="remember" style="width:auto;margin:0">記住帳號</label><button class="btn">登入</button></form>
 <script>const e=new URLSearchParams(location.search).get('e');if(e)document.getElementById('e').textContent=e==='rate'?'嘗試次數過多，請 15 分鐘後再試':e==='off'?'帳號已停用或已過期':'帳號或密碼錯誤';</script><script>(function(){const K="calc.rememberUser",u=document.querySelector("[name=username]"),c=document.getElementById("remember"),p=document.querySelector("[name=password]");const v=localStorage.getItem(K);if(v){u.value=v;c.checked=true;p.focus();}
-u.form.addEventListener("submit",()=>{c.checked&&u.value?localStorage.setItem(K,u.value.trim()):localStorage.removeItem(K);});})();</script></body></html>
+u.form.addEventListener("submit",()=>{c.checked&&u.value?localStorage.setItem(K,u.value.trim()):localStorage.removeItem(K);});})();</script><script>(function(){const v=document.getElementById("bgv");if(!v)return;const m=matchMedia("(prefers-reduced-motion: reduce)");const f=()=>{if(m.matches){v.pause();v.removeAttribute("autoplay");}else{v.muted=true;const p=v.play();p&&p.catch(()=>{});}};f();m.addEventListener&&m.addEventListener("change",f);})();</script></body></html>

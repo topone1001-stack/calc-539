@@ -29,6 +29,7 @@ app.post('/login',rateLimit({windowMs:15*60e3,limit:10,handler:(q,s)=>s.redirect
  if(ok&&u)return q.session.regenerate(()=>{q.session.user=name;s.redirect('/');});
  s.redirect('/login?e=1');});
 app.post('/logout',(q,s)=>q.session.destroy(()=>{s.clearCookie('calc.sid');s.redirect('/login');}));
+app.get(['/tiger.mp4','/tiger.jpg'],(q,s)=>s.sendFile(P(q.path.slice(1)),{maxAge:'7d'}));
 app.get('/layout.js',(q,s)=>s.sendFile(P('layout.js')));
 app.get('/style.css',(q,s)=>s.sendFile(P('style.css')));
 // server-side feature gating: strip sections the user lacks
