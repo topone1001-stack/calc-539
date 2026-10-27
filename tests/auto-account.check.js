@@ -8,7 +8,7 @@ async function run(name,bt,opts,perm){const b=await bt.launch(bt===chromium?{exe
  const u1=await create(p);made.push(u1);ok(name+' 建立 = 預填',u1===v1,u1);ok(name+' 建立後無自動複製',(await p.textContent('#cpmsg'))==='');ok(name+' 只有一個複製按鈕',await p.locator('#newacct button').count()===1);
  const v2=await p.inputValue('#newu');ok(name+' 下一個預填為新隨機帳號',/^m[23456789abcdefghjkmnpqrstuvwxyz]{6}$/.test(v2)&&v2!==u1,v2);
  await p.click('#cpbtn');await p.waitForTimeout(300);const m=await p.textContent('#cpmsg');ok(name+' 點複製',m.startsWith('已複製'),m);
- if(perm){const clip=await p.evaluate(()=>navigator.clipboard.readText());ok(name+' 剪貼簿內容',clip==='帳號：'+u1+' 密碼：12345678',clip);}
+ if(perm){const clip=await p.evaluate(()=>navigator.clipboard.readText());ok(name+' 剪貼簿內容',clip==='網址：https://calc-539.onrender.com\n帳號：'+u1+'\n密碼：12345678',clip);}
  await p.locator('#newacct').locator('xpath=..').screenshot({path:OUT+name+'-rand-created.png'});
  // 撞號：第二個分頁拿到同一預填，先後送出
  const c3=await b.newContext(opts);const p2=await c3.newPage();await login(p2,'admin',PW);await p2.goto(B+'/admin');await p2.fill('#newu',await p.inputValue('#newu'));const pa=await p.inputValue('#newu'),pb=await p2.inputValue('#newu');
