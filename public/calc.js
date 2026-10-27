@@ -62,7 +62,7 @@ function panel(k,d,extra,note){const G=GAMES[k],x=gameData(k,d),L=x.latest;const
  const m=curGame()===k?mine():[],hit=L.nums.filter(n=>m.includes(n));
  b.innerHTML=`<span class="gb">${G.name}</span> <b>最新開獎</b>　第 ${L.period} 期　${L.date}<div>${balls(L.nums,hit,L.special)}${L.special!=null?`<span class="splabel">${G.sp}</span>`:''}</div>${extra||''}`+
  `<details><summary>近 ${x.hist.length} 期開獎</summary><table class="hist">${x.hist.map(h=>`<tr><td>${h.period}</td><td>${h.date}</td><td>${h.nums.map(pad).join(' ')}${h.special!=null?' ＋'+pad(h.special):''}</td></tr>`).join('')}</table></details>`+
- `<p class="note">${note?note+'｜':''}資料來源：${G.src}${x.updated?'｜更新：'+new Date(x.updated).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'}):''}</p>`;}
+ `<p class="note">${note?note+'｜':''}資料來源：${x.src==='lotteryusa'?'lotteryusa.com（官方 calottery 暫時無法連線，備援來源，請以官方網站為準）':x.src==='official'?'California Lottery 官方':G.src}${x.updated?'｜更新：'+new Date(x.updated).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'}):''}</p>`;}
 function drawBox(d){const old=document.getElementById('draws');if(!old)return;old.style.display='none';
  panel('539',d,'','每週一至六 20:30 開獎（全民i彩券直播）｜號碼以官方網站公布為準｜<a target="_blank" rel="noopener" href="https://www.taiwanlottery.com/" style="color:#fdba74">台灣彩券官網</a>');
  panel('lotto',d,'','每週二、五 20:30 開獎（同上直播）｜號碼以官方網站公布為準｜<a target="_blank" rel="noopener" href="https://www.taiwanlottery.com/" style="color:#fdba74">台灣彩券官網</a>');

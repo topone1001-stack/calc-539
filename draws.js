@@ -31,8 +31,8 @@ async function caOfficialFull(){const r=await fetch(CA,{headers:{'User-Agent':'M
  return {rows:[m,...(d.PreviousDraws||[])].map(map),prizes:Object.values(m.Prizes||{}).map(p=>({desc:p.PrizeTypeDescription,count:p.Count,amount:p.Amount})),
   next:d.NextDraw?{period:d.NextDraw.DrawNumber,date:String(d.NextDraw.DrawDate).slice(0,10),jackpot:d.NextDraw.JackpotAmount}:null};}
 async function refreshCA(){caLast=Date.now();try{let src='lotteryusa',rows=[],prizes=[],next=null;
- try{rows=await require('./hist').caPage(1);src=rows.src||src;}catch(e){console.error('ca lotteryusa/hist failed:',e.message);}
- if(!rows.filter(caValid).length){src='official';const o=await caOfficialFull();rows=o.rows;prizes=o.prizes;next=o.next;}
+ try{const o=await caOfficialFull();if(o.rows.filter(caValid).length){src='official';rows=o.rows;prizes=o.prizes;next=o.next;}}catch(e){console.error('ca official failed:',e.message);cache.caOfficialErr=e.message;}
+ if(!rows.filter(caValid).length){src='lotteryusa';rows=await require('./hist').caPage(1);}
  const bad=rows.filter(x=>!caValid(x)).length;if(bad)console.error('ca invalid rows dropped:',bad,'src',src);
  const seen=new Set(),hist=rows.filter(caValid).sort((a,b)=>b.date<a.date?-1:b.date>a.date?1:0).filter(x=>!seen.has(x.period)&&seen.add(x.period)).slice(0,20);
  if(!hist.length)throw new Error('no valid rows from '+src);
