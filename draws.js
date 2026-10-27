@@ -20,15 +20,25 @@ async function videos(){try{const x=await (await fetch('https://www.youtube.com/
  const r=es.find(e=>/彩券開獎/.test(e.title)&&!/發票/.test(e.title));if(r){try{const w=await (await fetch('https://www.youtube.com/watch?v='+r.id,{headers:{'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36','Accept-Language':'zh-TW'},signal:AbortSignal.timeout(15000)})).text();
   const st=(w.match(/"liveBroadcastDetails":\{[^}]*"startTimestamp":"([^"]+)"/)||[])[1];if(st){const t0=new Date(st),d=new Date(t0.getTime()+8*3600e3);const show=Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate(),12,30,0);r.start=Math.max(0,Math.round((show-t0.getTime())/1000));r.liveStart=st;}}catch(e){}
   if(r.start==null)r.start=120;vid=r;cache.replay=r;save();}}catch(e){console.error('yt rss failed:',e.message);}}
-// 加州天天樂 Fantasy 5：California Lottery 官方 API
+// 加州天天樂 Fantasy 5：官方 calottery API 被防機器人擋（403），改以 lotteryusa.com 為主（共用 hist.caPage），官方當備援
 const CA='https://www.calottery.com/api/DrawGameApi/DrawGamePastDrawResults/10/1/20';let caLast=0;
 const caNums=d=>Object.values(d.WinningNumbers||{}).map(x=>+x.Number).sort((a,b)=>a-b);
-async function refreshCA(){caLast=Date.now();try{const r=await fetch(CA,{headers:{'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36','Accept':'application/json'},signal:AbortSignal.timeout(20000)});
+// 號碼檢查：5 個、皆為 1–39 的整數、不重複；不合格的整期丟掉，避免對方改版寫入錯資料
+const caValid=x=>require('./hist').caValid(x);
+async function caOfficialFull(){const r=await fetch(CA,{headers:{'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36','Accept':'application/json'},signal:AbortSignal.timeout(20000)});
  if(!r.ok)throw new Error('HTTP '+r.status);const d=await r.json();const m=d.MostRecentDraw;
  const map=x=>({period:x.DrawNumber,date:String(x.DrawDate).slice(0,10),nums:caNums(x)});
- const seen=new Set(),hist=[m,...(d.PreviousDraws||[])].map(map).filter(x=>x.nums.length===5&&!seen.has(x.period)&&seen.add(x.period)).slice(0,20);
- cache.ca={updated:new Date().toISOString(),latest:hist[0],hist,prizes:Object.values(m.Prizes||{}).map(p=>({desc:p.PrizeTypeDescription,count:p.Count,amount:p.Amount})),
-  next:d.NextDraw?{period:d.NextDraw.DrawNumber,date:String(d.NextDraw.DrawDate).slice(0,10),jackpot:d.NextDraw.JackpotAmount}:null};save();console.log('ca updated',hist[0]&&hist[0].period);}catch(e){console.error('ca fetch failed:',e.message);}}
+ return {rows:[m,...(d.PreviousDraws||[])].map(map),prizes:Object.values(m.Prizes||{}).map(p=>({desc:p.PrizeTypeDescription,count:p.Count,amount:p.Amount})),
+  next:d.NextDraw?{period:d.NextDraw.DrawNumber,date:String(d.NextDraw.DrawDate).slice(0,10),jackpot:d.NextDraw.JackpotAmount}:null};}
+async function refreshCA(){caLast=Date.now();try{let src='lotteryusa',rows=[],prizes=[],next=null;
+ try{rows=await require('./hist').caPage(1);src=rows.src||src;}catch(e){console.error('ca lotteryusa/hist failed:',e.message);}
+ if(!rows.filter(caValid).length){src='official';const o=await caOfficialFull();rows=o.rows;prizes=o.prizes;next=o.next;}
+ const bad=rows.filter(x=>!caValid(x)).length;if(bad)console.error('ca invalid rows dropped:',bad,'src',src);
+ const seen=new Set(),hist=rows.filter(caValid).sort((a,b)=>b.date<a.date?-1:b.date>a.date?1:0).filter(x=>!seen.has(x.period)&&seen.add(x.period)).slice(0,20);
+ if(!hist.length)throw new Error('no valid rows from '+src);
+ const prev=cache.ca||{};// lotteryusa 沒有獎金和下期資訊：沿用上次官方抓到的值
+ cache.ca={updated:new Date().toISOString(),src,latest:hist[0],hist,prizesPeriod:prizes.length?hist[0].period:prev.prizesPeriod,prizes:prizes.length?prizes:(String(prev.prizesPeriod)===String(hist[0].period)?(prev.prizes||[]):[]),next:next||(prev.next&&prev.next.date>hist[0].date?prev.next:null)};
+ save();console.log('ca updated',src,hist[0].period);}catch(e){console.error('ca fetch failed:',e.message);}}
 function tickCA(){const d=tpe(),hm=d.getUTCHours()*60+d.getUTCMinutes();if((hm>=9*60+30&&hm<=11*60+30)||Date.now()-caLast>=60*60e3-30e3)refreshCA();}
 // 香港六合彩：HKJC 官方 GraphQL（查詢字串須與官網完全一致，存在 hk-query.graphql）
 const HKQ=require('fs').readFileSync(require('path').join(__dirname,'hk-query.graphql'),'utf8');let hkLast=0;
