@@ -114,7 +114,7 @@ const OPN=200;const oplog=(q,act,target,detail)=>{const L=S.get('oplog')||[];L.u
 const tpe=t=>t?new Date(t).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',hour12:false}):'—';
 const latestOf=g=>{const d=DR.get();return g==='539'?d.d539&&d.d539[0]:g==='lotto'?d.lotto&&d.lotto[0]:g==='super'?d.super&&d.super[0]:d[g]&&d[g].latest;};
 const GN={'539':'今彩539',lotto:'大樂透',super:'威力彩',ca:'加州天天樂',hk:'香港六合彩'};
-const page=(q,msg)=>{const t=csrf(q),us=U.load(),me=q.session.user,isA=q.u.role==='admin',vis=new Set(visible(q)),f=q.query;
+const page=(q,msg,created)=>{const t=csrf(q),us=U.load(),me=q.session.user,isA=q.u.role==='admin',vis=new Set(visible(q)),f=q.query;
  const F=(a,inner)=>`<form method="post" action="/admin/${a}"><input type="hidden" name="_csrf" value="${t}">${inner}</form>`;
  const myEff=eff(us,me),capPerms=isA?ALL:myEff.perms;
  const agents=[...(isA?[]:[me]),...[...vis].filter(n=>norm(n,us[n]).role==='agent')];
@@ -144,16 +144,25 @@ const page=(q,msg)=>{const t=csrf(q),us=U.load(),me=q.session.user,isA=q.u.role=
 body{display:block}.wrap{display:block;max-width:980px;margin:0 auto;padding:12px}.u{border:1px solid #334155;border-radius:10px;padding:8px 10px;margin:8px 0;background:#0f172a99}.h{margin-bottom:4px}.b{font-size:12px;padding:2px 8px;border-radius:9px;background:#334155}.on{background:#166534}.off{background:#991b1b}
 form{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0}.row{display:flex;flex-wrap:wrap;gap:6px}.ck{display:flex;gap:4px;align-items:center;margin:0;white-space:nowrap}.ck input[type=checkbox]{width:auto;margin:0}input,select{margin:0;padding:7px;width:auto}button{padding:7px 12px;border-radius:7px;border:0;background:#2563eb;color:#fff;cursor:pointer}.del{background:#b91c1c}.msg{background:#1e3a8a;padding:8px;border-radius:8px}.note{color:#94a3b8;font-size:12px}a{color:#60a5fa}summary{cursor:pointer;color:#93c5fd;font-size:13px;margin:4px 0}
 .box{border:1px solid #334155;border-radius:10px;padding:10px;margin:10px 0}table{width:100%;border-collapse:collapse}td,th{border:1px solid #334155;padding:4px;font-size:12px}</style></head><body><div class="wrap">
-<p><a href="/">← 回計算器</a>｜<a href="/password">修改我的密碼</a></p><h1>${isA?'管理後台':'代理後台'}</h1><p class="note">登入身分：${esc(me)}（${ROLES[q.u.role]}）${isA?'':'｜只能建立與管理自己的會員；權限與到期日不可超過自己'}</p>${msg?`<p class="msg">${esc(msg)}</p>`:''}
-<div class="box"><h2>新增帳號</h2>${F('create',`<input name="username" placeholder="帳號" required pattern="[A-Za-z0-9_.\\-]{3,32}" autocomplete="off"><span class="note">預設密碼 12345678，首次登入須修改</span>
+<p><a href="/">← 回計算器</a>｜<a href="/password">修改我的密碼</a></p><h1>${isA?'管理後台':'代理後台'}</h1><p class="note">登入身分：${esc(me)}（${ROLES[q.u.role]}）${isA?'':'｜只能建立與管理自己的會員；權限與到期日不可超過自己'}</p>${msg?`<p class="msg">${esc(msg)}</p>`:''}${created?`<div class="box" id="newacct" style="border-color:#d4af37;background:#2a1f0c"><b>✅ 帳號已建立</b><div id="cptxt" style="font-size:18px;margin:6px 0;user-select:all">帳號：${esc(created)} 密碼：12345678</div><button type="button" id="cpbtn">📋 複製</button> <span id="cpmsg" class="note"></span><p class="note">首次登入會要求修改密碼。</p></div>`:''}
+<div class="box"><h2>新增帳號</h2>${F('create',`<input name="username" id="newu" value="${genName(us,'user')}" placeholder="帳號" required pattern="[A-Za-z0-9_.\\-]{3,32}" autocomplete="off"><button type="button" id="regen" title="重新產生帳號">🔄</button><span class="note">預設密碼 12345678，首次登入須修改</span>
  ${isA?sel('role',[['user','會員'],['agent','代理'],['admin','管理員']],'user')+`<label class="ck">上線${sel('parent',[['','（無，直屬管理員）'],...agents.map(a=>[a,a])],'')}</label>`:'<input type="hidden" name="role" value="user"><span class="note">建立會員（上線＝自己）</span>'}
  <label class="ck">到期<input type="date" name="expires"${!isA&&myEff.effExpires?` max="${myEff.effExpires}" value="${myEff.effExpires}"`:''}></label>`+FEATS.filter(([k])=>capPerms.includes(k)).map(([k,l])=>`<label class="ck"><input type="checkbox" name="perms" value="${k}" checked>${l}</label>`).join('')+'<button>新增</button>')}</div>
 <div class="box"><form method="get" action="/admin"><input name="q" placeholder="搜尋帳號／IP／上線" value="${esc(f.q||'')}">${sel('agent',[['','全部代理線'],...agents.map(a=>[a,'代理：'+a])],f.agent||'')}${sel('role',[['','全部角色'],['admin','管理員'],['agent','代理'],['user','會員']],f.role||'')}${sel('st',[['','全部狀態'],['ok','正常'],['bad','停用／過期']],f.st||'')}<button>篩選</button> <a href="/admin">清除</a></form>
 <h2>帳號樹（${list.length} / ${vis.size}）</h2>${rows||'<p class="note">沒有符合的帳號</p>'}</div>
 <div class="box"><details ${ops.length?'':'open'}><summary><b>操作紀錄（最近 ${ops.length} 筆）</b></summary><div style="overflow:auto"><table><tr><th>時間</th><th>操作者</th><th>動作</th><th>對象</th><th>內容</th><th>IP</th></tr>${ops.map(o=>`<tr><td>${tpe(o.t)}</td><td>${esc(o.by)}</td><td>${esc(o.act)}</td><td>${esc(o.target)}</td><td>${esc(o.detail)}</td><td>${esc(o.ip||'')}</td></tr>`).join('')}</table></div></details></div>
-</div></body></html>`;};
+</div><script>(function(){
+const u=document.getElementById('newu'),rg=document.getElementById('regen'),rs=document.querySelector('form[action="/admin/create"] select[name=role]');let edited=false;
+if(u){u.addEventListener('input',()=>edited=true);const gen=async()=>{try{const r=await fetch('/admin/genname?role='+(rs?rs.value:'user'));const j=await r.json();u.value=j.name;edited=false;}catch(e){}};rg.onclick=gen;if(rs)rs.addEventListener('change',()=>{if(!edited)gen();});}
+const t=document.getElementById('cptxt'),b=document.getElementById('cpbtn'),m=document.getElementById('cpmsg');if(!t)return;
+const legacy=s=>{try{const a=document.createElement('textarea');a.value=s;a.setAttribute('readonly','');a.style.position='fixed';a.style.opacity='0';document.body.append(a);a.select();a.setSelectionRange(0,s.length);const ok=document.execCommand('copy');a.remove();return ok;}catch(e){return false;}};
+const copy=async s=>{try{if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(s);return true;}}catch(e){}return legacy(s);};
+const say=(ok,auto)=>{m.textContent=ok?(auto?'已自動複製':'已複製'):'請按複製';m.style.color=ok?'#86efac':'#fcd34d';};
+copy(t.textContent).then(ok=>say(ok,true));b.onclick=async()=>say(await copy(t.textContent),false);})();</script></body></html>`;};
+const genName=(us,role)=>{const pre=role==='agent'?'a':role==='admin'?'s':'m';for(let i=0;i<200;i++){const n=pre+String(crypto.randomInt(0,1e6)).padStart(6,'0');if(!Object.prototype.hasOwnProperty.call(us,n))return n;}return pre+Date.now().toString().slice(-8);};
+app.get('/admin/genname',auth,mgr,(q,s)=>{const r=q.u.role==='admin'&&['user','agent','admin'].includes(q.query.role)?q.query.role:'user';s.set('Cache-Control','no-store').json({name:genName(U.load(),r)});});
 const go=(q,s,m)=>{q.session.flash=m;s.redirect('/admin'+(q.get('Referer')||'').replace(/^.*\/admin/,'').replace(/[^?=&\w%.\-]/g,'').slice(0,200));};
-app.get('/admin',auth,mgr,(q,s)=>{const m=q.session.flash;delete q.session.flash;s.set('Cache-Control','no-store').type('html').send(page(q,m));});
+app.get('/admin',auth,mgr,(q,s)=>{const m=q.session.flash,c=q.session.created;delete q.session.flash;delete q.session.created;s.set('Cache-Control','no-store').type('html').send(page(q,m,c));});
 const arr=x=>(Array.isArray(x)?x:x?[x]:[]).filter(k=>ALL.includes(k));
 const date=x=>/^\d{4}-\d{2}-\d{2}$/.test(x||'')?x:'';
 // 每個操作：伺服器端檢查對象是否在自己的下線內
@@ -170,7 +179,7 @@ A('create',(q,us,n)=>{if(!/^[A-Za-z0-9_.\-]{3,32}$/.test(n))return '帳號格式
  let parent=String(q.body.parent||'');if(!isA)parent=q.session.user;
  else if(parent&&!(us[parent]&&norm(parent,us[parent]).role==='agent'))parent='';if(role==='admin')parent='';
  const L=limits(q,us,parent);us[n]={hash:bcrypt.hashSync(DEFPW,12),mustChange:true,role,parent,enabled:true,expires:clampExp(date(q.body.expires),L.exp),perms:arr(q.body.perms).filter(k=>L.perms.includes(k)),created:new Date().toISOString(),createdBy:q.session.user};
- return `✓ 已新增 ${ROLES[role]} ${n}${parent?'（上線 '+parent+'）':''}`;});
+ q.session.created=n;return `✓ 已新增 ${ROLES[role]} ${n}${parent?'（上線 '+parent+'）':''}`;});
 A('reset',(q,us,n)=>{us[n]={...us[n],...norm(n,us[n]),hash:bcrypt.hashSync(DEFPW,12),mustChange:true};return '✓ 已重設 '+n+' 的密碼為 12345678（下次登入須修改）';});
 A('toggle',(q,us,n)=>{if(norm(n,us[n]).enabled&&lastAdmin(us,n))return '至少要保留一位管理員';us[n]={...us[n],enabled:!norm(n,us[n]).enabled};const dn=downs(us,n).length;return '✓ 已'+(us[n].enabled?'啟用 ':'停用 ')+n+(dn&&!us[n].enabled?`（其 ${dn} 個下線同時無法登入）`:'');});
 A('delete',(q,us,n)=>{const dn=downs(us,n).length;if(dn)return `${n} 還有 ${dn} 個下線，請先刪除或停用下線`;if(lastAdmin(us,n))return '至少要保留一位管理員';delete us[n];return '✓ 已刪除 '+n;});
