@@ -54,8 +54,7 @@ function gameTheme(){const g=document.getElementById('game');document.documentEl
 const GAMES={'539':{name:'今彩539',cls:'g539',max:39,src:'台灣彩券'},lotto:{name:'大樂透',cls:'glo',max:49,sp:'特別號',src:'台灣彩券'},super:{name:'威力彩',cls:'gsu',max:38,sp:'第二區',src:'台灣彩券'},ca:{name:'加州天天樂',cls:'gca',max:39,src:'California Lottery'},hk:{name:'香港六合彩',cls:'ghk',max:49,sp:'特別號',src:'香港賽馬會'},vn655:{name:'越南 Power 6/55',cls:'gvn',max:55,sp:'特別號',src:'Vietlott'},vn645:{name:'越南 Mega 6/45',cls:'gvn',max:45,src:'Vietlott'},vn535:{name:'越南 Lotto 5/35',cls:'gvn',max:35,sp:'特別號',src:'Vietlott'}};
 const ESC=x=>String(x==null?'':x).replace(/[&<>"'`]/g,c=>'&#'+c.charCodeAt(0)+';');
 // 落球順序：只有官方有提供的彩種（台灣彩券）才顯示，沒有就標明
-const ordTxt=L=>Array.isArray(L.order)&&L.order.length?'落球順序：'+L.order.map((n,i)=>`第${i+1}球 ${pad(n)}`).join('、'):'來源未提供落球順序';
-const ordLine=L=>`<div class="note">${ordTxt(L)}</div>`;
+const ordLine=L=>Array.isArray(L.order)&&L.order.length?`<div class="ordrow"><span class="ordlb">落球順序</span>${L.order.map((n,i)=>`<span class="ball mini">${pad(n)}</span>`).join('')}${L.special!=null?`<span class="ball sp mini">${pad(L.special)}</span>`:''}</div>`:'<div class="note">來源未提供落球順序</div>';
 const curGame=()=>{const g=document.getElementById('game');return g?g.value:'539';};
 function gameData(k,d){d=d||DD||{};if(k==='539')return {latest:d.d539&&d.d539[0],hist:d.d539||[],updated:d.updated};if(k==='lotto')return {latest:d.lotto&&d.lotto[0],hist:d.lotto||[],updated:d.updated};if(k==='super')return {latest:d.super&&d.super[0],hist:d.super||[],updated:d.updated};const c=d[k];return c?{...c}:{hist:[]};}
 function mine(){const el=document.getElementById('mine');if(!el)return[];const mx=GAMES[curGame()].max;return [...new Set((el.value.match(/\d+/g)||[]).map(Number).filter(n=>n>=1&&n<=mx))];}
