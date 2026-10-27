@@ -80,8 +80,9 @@ function rAdv(p){const mx=D.max,s=stat();const m3=new Map();for(const r of R){co
 // ---- 5. 熱門分享 ----
 async function rShare(p){const g=D.g,x=await api('/api/share/'+g);const ns=nums(D.max);const pick=new Set(x.mine||[]);
  p.innerHTML=`<div class="card2"><h3>彩迷熱門號碼（第 ${x.period} 期，${x.users} 人分享）</h3><div style="height:240px"><canvas id="cSh"></canvas></div></div>
- <div class="card2"><h3>${x.mine?'你本期已分享：'+x.mine.map(pad).join(' '):'分享我的號碼（最多 10 碼，每期一次）'}</h3>${x.mine?'':`<div class="grid" id="sg">${ns.map(n=>`<button data-p="${n}">${pad(n)}</button>`).join('')}</div><button class="btn2" id="sgo" style="margin-top:8px">送出分享</button> <span id="smsg" class="note"></span>`}</div>`;
+ <div class="card2"><h3>${x.mine?'你本期已分享：'+x.mine.map(pad).join(' ')+' <button class="btn2" id="sdel" style="margin-left:8px">撤回我的分享</button> <span id="smsg" class="note"></span>':'分享我的號碼（最多 10 碼，每期一次）'}</h3>${x.mine?'':`<div class="grid" id="sg">${ns.map(n=>`<button data-p="${n}">${pad(n)}</button>`).join('')}</div><button class="btn2" id="sgo" style="margin-top:8px">送出分享</button> <span id="smsg" class="note"></span>`}</div>`;
  chart('cSh',{type:'bar',data:{labels:ns.map(pad),datasets:[{label:'人數',data:ns.map(n=>x.cnt[n]||0),backgroundColor:GM[g].c}]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}},onClick:(e,el)=>{if(el.length){SEL.add(el[0].index+1);tray();}}}});
+ if(x.mine)$('sdel').onclick=async()=>{if(!confirm('確定撤回本期分享？撤回後可重新分享。'))return;const r=await api('/api/share/'+g,{method:'DELETE',headers:{'X-CSRF':CSRF}});if(r&&r.ok)rShare(p);else $('smsg').textContent=(r&&r.error)||'撤回失敗';};
  if(!x.mine){p.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{const n=+b.dataset.p;if(pick.has(n))pick.delete(n);else if(pick.size<10)pick.add(n);b.classList.toggle('sel',pick.has(n));});
   $('sgo').onclick=async()=>{const r=await post('/api/share/'+g,{nums:[...pick]});if(r.ok)rShare(p);else $('smsg').textContent=r.error||'失敗';};}}
 // ---- 6. 沙盤浮字 ----
