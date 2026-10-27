@@ -18,5 +18,5 @@ function parseMagayo(t,g){const out=[];const D=s=>{const m=s.match(/(\d{4}) 年 
  const seen=new Set();return out.filter(x=>!seen.has(x.date)&&seen.add(x.date)).slice(0,20).map(x=>({period:x.date.replace(/-/g,''),...x}));}
 async function fetchGame(g){try{const h=parseOfficial(await get(G[g].off),g);if(h.length)return {src:'official',hist:h};throw new Error('parse');}
  catch(e){const h=parseMagayo(await get('https://www.magayo.com/zht/lotto-results/vietnam/'+G[g].mg+'/'),g);if(!h.length)throw new Error('magayo parse');return {src:'magayo',why:e.message,hist:h};}}
-async function refreshVN(cache,save){for(const g of Object.keys(G)){try{const r=await fetchGame(g);cache[g]={updated:new Date().toISOString(),src:r.src,latest:r.hist[0],hist:r.hist};console.log('vn updated',g,r.src,r.hist[0].date);}catch(e){console.error('vn fetch failed',g,e.message);}}save();}
+async function refreshVN(cur,save){const C=()=>typeof cur==='function'?cur():cur;for(const g of Object.keys(G)){try{const r=await fetchGame(g);C()[g]={updated:new Date().toISOString(),src:r.src,latest:r.hist[0],hist:r.hist};console.log('vn updated',g,r.src,r.hist[0].date);}catch(e){console.error('vn fetch failed',g,e.message);}}save();}
 module.exports={refreshVN,parseOfficial,parseMagayo,GAMES:G};
