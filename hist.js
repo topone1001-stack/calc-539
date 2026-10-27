@@ -46,8 +46,11 @@ async function caPage(p){if(p>1)return [];
 exports.caPage=caPage;
 const months=(from)=>{const out=[];let [y,m]=from.split('-').map(Number);const now=new Date(Date.now()+8*3600e3),ey=now.getUTCFullYear(),em=now.getUTCMonth()+1;while(y<ey||(y===ey&&m<=em)){out.push(`${y}-${String(m).padStart(2,'0')}`);m++;if(m>12){m=1;y++;}}return out;};
 // 六合彩歷史落球順序：HKJC 只給排序號碼，改用 biga 歷史表（非官方）；號碼和特別號要跟資料庫裡 HKJC 官方的一致才寫入
+const HK_TRY=20,hkTry={};
 async function hkOrdBackfill(){if(!pool())return 0;const DR=require('./draws');const HKORD='https://mark6online.biga.com.tw/6/MARK6/%E5%AF%A6%E7%94%A8%E7%B5%B1%E8%A8%88%EF%BC%8D%E6%AD%B7%E5%8F%B2%E9%96%8B%E7%8D%8E%E8%99%9F%E7%A2%BC.php';
- const full=!S.get('hkOrdDone'),M=new Map();if(!full&&(mem.hk||[]).slice(-3).every(x=>x[4]))return 0;for(let p=1;p<=(full?60:2);p++){try{const r=await fetch(HKORD+'?page='+p,{headers:{'User-Agent':UA},signal:AbortSignal.timeout(20000)});if(!r.ok)break;const m=DR._parseHKOrder(await r.text());if(!m.size)break;
+ const full=!S.get('hkOrdDone')&&!(mem.hk||[]).some(x=>x[4]),M=new Map();
+ // 重試上限：最新幾期若 biga 一直對不上 HKJC，同一期最多試 HK_TRY 次就放棄（不再每次同步都抓）
+ const want=(mem.hk||[]).slice(-3).filter(x=>!x[4]&&(hkTry[x[0]]||0)<HK_TRY);if(!full&&!want.length)return 0;want.forEach(x=>hkTry[x[0]]=(hkTry[x[0]]||0)+1);for(let p=1;p<=(full?60:2);p++){try{const r=await fetch(HKORD+'?page='+p,{headers:{'User-Agent':UA},signal:AbortSignal.timeout(20000)});if(!r.ok)break;const m=DR._parseHKOrder(await r.text());if(!m.size)break;
   for(const [k,v] of m){const yy=+k.slice(2,4);M.set((yy>50?'19':'20')+k.slice(2),v);}}catch(e){console.error('hk ord page',p,e.message);break;}await sleep(400);}
  let n=0;for(const x of (mem.hk||[])){if(x[4])continue;const o=M.get(x[0]);if(!o||o.special!==x[3]||o.order.length!==6||o.order.slice().sort((a,b)=>a-b).join()!==x[2].join())continue;
   n+=(await pool().query("UPDATE draws SET ord=$1 WHERE game='hk' AND period=$2 AND ord IS NULL",[o.order,x[0]])).rowCount;}

@@ -1,10 +1,10 @@
 // 開獎統計分析（資料由伺服器預先整理，前端依範圍即時計算）
 const H=x=>String(x==null?'':x).replace(/[&<>"'`]/g,c=>'&#'+c.charCodeAt(0)+';'),$=i=>document.getElementById(i),pad=n=>String(n).padStart(2,'0'),fmt=n=>Number(n).toLocaleString('zh-TW');
-const GM={'539':{name:'今彩539',c:'#ea580c',b:'#fb923c'},lotto:{name:'大樂透',c:'#ca8a04',b:'#fde047'},super:{name:'威力彩',c:'#be185d',b:'#f9a8d4'},ca:{name:'加州天天樂',c:'#1d4ed8',b:'#60a5fa'},hk:{name:'香港六合彩',c:'#7e22ce',b:'#c084fc'},vn655:{name:'越南 Power 6/55',c:'#15803d',b:'#4ade80'},vn645:{name:'越南 Mega 6/45',c:'#0f766e',b:'#5eead4'},vn535:{name:'越南 Lotto 5/35',c:'#65a30d',b:'#bef264'}};
+const GM={'539':{name:'今彩539',c:'#ea580c',b:'#fb923c'},lotto:{name:'大樂透',c:'#ca8a04',b:'#fde047'},super:{name:'威力彩',c:'#be185d',b:'#f9a8d4'},ca:{name:'加州天天樂',c:'#1d4ed8',b:'#60a5fa'},hk:{name:'香港六合彩',c:'#7e22ce',b:'#c084fc'},vn655:{name:'越南 Power 6/55',c:'#15803d',b:'#4ade80'},vn645:{name:'越南 Mega 6/45',c:'#0f766e',b:'#5eead4'},vn535:{name:'越南 Lotto 5/35',c:'#65a30d',b:'#bef264'},vnmn:{name:'越南南部各省彩',c:'#b45309',b:'#fcd34d',prov:1},vnmt:{name:'越南中部各省彩',c:'#a16207',b:'#fde68a',prov:1},vnmb:{name:'越南北部各省彩',c:'#9a3412',b:'#fdba74',prov:1}};
 const isVN=()=>D&&String(D.g).startsWith('vn');
 // 期別標籤：越南用日期（5/35 加時段）
 const lb=r=>String(r[0]).length>=8&&isVN()?r[1].slice(5)+(String(r[0]).length>8?' '+String(r[0]).slice(8)+'時':''):String(r[0]).slice(-3);
-let ME={},D=null,R=[],SEL=new Set(),charts={},CSRF='';
+let PV=null,PR=[],ME={},D=null,R=[],SEL=new Set(),charts={},CSRF='';
 const TABS=[['hist','📜 歷史／查詢','hist'],['num','🔢 號碼統計','stats'],['trend','📈 走勢','stats'],['adv','🧪 進階分析','adv'],['ord','🎯 落球順序','adv'],['share','🔥 熱門分享','share'],['sand','🎲 沙盤浮字','fun'],['mine','⭐ 我的號碼','mynum'],['other','🎰 3星/4星/Bingo','other']];
 const ball=(n,sp)=>`<span class="ball${sp?' sp':''}${SEL.has(n)&&!sp?' sel':''}" data-n="${n}">${pad(n)}</span>`;
 const api=(u,o)=>fetch(u,o).then(r=>r.json());
@@ -17,16 +17,16 @@ document.addEventListener('click',e=>{const t=e.target.closest('[data-n]');if(!t
 const send=to=>{localStorage.setItem('calc.picks',JSON.stringify({game:$('g').value,nums:[...SEL].sort((a,b)=>a-b),to}));location.href='/#'+to;};
 const need=()=>{if(SEL.size)return true;alert('請先點選號碼');return false;};$('tosend').onclick=()=>need()&&send('draw');$('tobao').onclick=()=>need()&&send('bao');$('toclr').onclick=()=>{if(!need())return;SEL.clear();tray();};
 // ---- 範圍 ----
-function applyRange(){const v=$('rng').value;$('dr').style.display=v==='d'?'':'none';let rows=D.rows;
+function applyRange(){if(PV)return provRange();const v=$('rng').value;$('dr').style.display=v==='d'?'':'none';let rows=D.rows;
  if(v==='d'){const a=$('d1').value,b=$('d2').value;rows=rows.filter(r=>(!a||r[1]>=a)&&(!b||r[1]<=b));}else if(+v)rows=rows.slice(-v);R=rows;
  $('info').textContent=`${GM[D.g].name}：資料庫共 ${fmt(D.total)} 期（${D.first||'—'} ～ ${D.last||'—'}），目前分析 ${fmt(R.length)} 期`+(D.importing?'（其他遊戲仍在匯入中）':'');render();}
 ['rng','d1','d2'].forEach(i=>$(i).onchange=applyRange);
-async function load(){const g=$('g').value;document.documentElement.style.setProperty('--gc',GM[g].c);document.documentElement.style.setProperty('--gb',GM[g].b);$('info').textContent='載入中…';
+async function load(){const g=$('g').value;if(GM[g].prov)return loadProv(g);PV=null;document.documentElement.style.setProperty('--gc',GM[g].c);document.documentElement.style.setProperty('--gb',GM[g].b);$('info').textContent='載入中…';
  const d=await api('/api/hist/'+g,{cache:'no-cache'});if($('g').value!==g)return;D=d;SEL.clear();tray();if(!D.total){$('info').textContent='⏳ 正在從官方匯入完整歷史資料（首次約 5 分鐘），完成後本頁會自動更新…';$('panes').querySelectorAll('.pane').forEach(p=>p.innerHTML='');setTimeout(()=>{if($('g').value===g)load();},20000);return;}
  if(D.importing)$('info').dataset.imp=1;applyRange();}
 $('g').onchange=load;
 let tab=localStorage.getItem('stats.tab')||'';
-function render(){const p=$('pane-'+tab);if(!p)return;if(isVN()&&tab==='sand'){p.innerHTML='<div class="card2"><p class="note">越南彩不提供隨機選號功能。</p></div>';return;}({hist:rHist,num:rNum,trend:rTrend,adv:rAdv,ord:rOrd,share:rShare,sand:rSand,mine:rMine,other:rOther})[tab](p);tray();}
+function render(){const p=$('pane-'+tab);if(!p)return;if(PV)return rProv(p);if(isVN()&&tab==='sand'){p.innerHTML='<div class="card2"><p class="note">越南彩不提供隨機選號功能。</p></div>';return;}({hist:rHist,num:rNum,trend:rTrend,adv:rAdv,ord:rOrd,share:rShare,sand:rSand,mine:rMine,other:rOther})[tab](p);tray();}
 // ---- 落球順序（只用官方提供的落球順序；依目前範圍統計各球位）----
 let oq='';
 function rOrd(p){const rows=R.filter(r=>Array.isArray(r[4])&&r[4].length);if(!rows.length){p.innerHTML=`<div class="card2"><h3>🎯 落球順序</h3><p class="note">${H(GM[D.g].name)}：來源未提供落球順序，無法統計。</p></div>`;return;}
@@ -124,3 +124,27 @@ async function rOther(p){const o=await api('/api/other');const row=(a,f)=>(a||[]
 // 即時更新：有新開獎時，沒在選號就自動重載，正在選號就顯示提示
 (()=>{let V=null;const poll=()=>fetch('/api/draws-ver',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(x=>{if(!x)return setTimeout(poll,60e3);
  if(V!==null&&x.v!==V){if(!SEL.size)load();else $('info').textContent='🎉 有新開獎，選號完成後重新選一次彩種即可更新';}V=x.v;setTimeout(poll,x.live?15e3:60e3);}).catch(()=>setTimeout(poll,60e3));setTimeout(poll,3e3);})();
+
+// ---- 越南各省彩（北／中／南部）：數字獎號，統計用「每個獎號末兩碼」（lô tô，00–99）----
+const PZ={DB:'特別獎',G1:'一獎',G2:'二獎',G3:'三獎',G4:'四獎',G5:'五獎',G6:'六獎',G7:'七獎',G8:'八獎'},PZK=['DB','G1','G2','G3','G4','G5','G6','G7','G8'];
+async function loadProv(g){document.documentElement.style.setProperty('--gc',GM[g].c);document.documentElement.style.setProperty('--gb',GM[g].b);$('info').textContent='載入中…';
+ const d=await api('/api/vnprov/'+g,{cache:'no-cache'});if($('g').value!==g)return;PV=d;D={g,rows:[],total:0,n:0,max:99};SEL.clear();tray();
+ if(!d.rows.length){$('info').textContent='⏳ 正在從 xskt.com.vn 匯入歷史資料，完成後重新選一次彩種即可';$('panes').querySelectorAll('.pane').forEach(p=>p.innerHTML='');return;}provRange();}
+function provRange(){const v=$('rng').value;$('dr').style.display=v==='d'?'':'none';let rows=PV.rows;const days=[...new Set(rows.map(r=>r.date))];
+ if(v==='d'){const a=$('d1').value,b=$('d2').value;rows=rows.filter(r=>(!a||r.date>=a)&&(!b||r.date<=b));}else if(+v){const keep=new Set(days.slice(-v));rows=rows.filter(r=>keep.has(r.date));}PR=rows;
+ const nd=new Set(PR.map(r=>r.date)).size;$('info').textContent=`${GM[PV.r].name}：資料庫共 ${fmt(days.length)} 天、${fmt(PV.rows.length)} 場（${days[0]}～${days[days.length-1]}），目前分析 ${fmt(nd)} 天、${fmt(PR.length)} 場｜資料來源：xskt.com.vn（備援，請以官方為準）`;render();}
+const lo=r=>PZK.flatMap(k=>(r.prizes[k]||[]).map(x=>x.slice(-2)));
+const t2=n=>String(n).padStart(2,'0');
+function rProv(p){const N='<p class="note">資料來源：xskt.com.vn（備援，請以官方為準）｜⚠️ 歷史統計，非預測；每期開獎都是獨立隨機</p>';
+ const card=(h,b)=>`<div class="card2"><h3>${h}</h3>${b}</div>`;
+ if(tab==='hist'){const rows=PR.slice().reverse().slice(0,300);p.innerHTML=card(`📜 歷史開獎（最新 ${fmt(rows.length)} 場${PR.length>300?'，共 '+fmt(PR.length)+' 場':''}）`,N+`<div style="overflow:auto"><table class="tb"><tr><th>日期</th><th>省份</th><th>特別獎</th><th>全部獎號</th></tr>${rows.map(r=>`<tr><td>${H(r.date)}</td><td>${H(r.prov)}</td><td><b>${H(r.prizes.DB.join(' '))}</b></td><td style="text-align:left;font-size:12px">${PZK.filter(k=>r.prizes[k]).map(k=>PZ[k]+' '+r.prizes[k].map(H).join(' ')).join('<br>')}</td></tr>`).join('')}</table></div>`);return;}
+ if(tab==='num'||tab==='trend'||tab==='adv'){const cnt=Array(100).fill(0),db=Array(100).fill(0),last=Array(100).fill(-1);const days=[...new Set(PR.map(r=>r.date))];const di=new Map(days.map((d,i)=>[d,i]));
+  PR.forEach(r=>{lo(r).forEach(x=>{cnt[+x]++;last[+x]=Math.max(last[+x],di.get(r.date));});db[+r.prizes.DB[0].slice(-2)]++;});const tot=cnt.reduce((a,b)=>a+b,0);
+  if(tab==='num'){const top=[...cnt.keys()].sort((a,b)=>cnt[b]-cnt[a]);p.innerHTML=card(`🔢 末兩碼出現次數（${fmt(days.length)} 天、${fmt(PR.length)} 場、共 ${fmt(tot)} 個獎號）`,N+`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:4px">${[...Array(100).keys()].map(n=>`<div style="border:1px solid #334155;border-radius:6px;padding:4px;text-align:center"><b>${t2(n)}</b><br><span class="note">${cnt[n]} 次</span></div>`).join('')}</div><p class="note">最常出現：${top.slice(0,10).map(n=>t2(n)+'（'+cnt[n]+'）').join('、')}</p><h3>特別獎末兩碼</h3><p class="note">${[...db.keys()].filter(n=>db[n]).sort((a,b)=>db[b]-db[a]).slice(0,15).map(n=>t2(n)+'（'+db[n]+'）').join('、')||'—'}</p>`);return;}
+  if(tab==='trend'){const gap=n=>last[n]<0?days.length:days.length-1-last[n];const g=[...Array(100).keys()].sort((a,b)=>gap(b)-gap(a));p.innerHTML=card('📈 末兩碼遺漏天數（幾天沒出現）',N+`<p class="note">最久沒出現：${g.slice(0,15).map(n=>t2(n)+'（'+gap(n)+' 天）').join('、')}</p><p class="note">最近一天有出現：${g.filter(n=>gap(n)===0).map(t2).join(' ')||'—'}</p>`);return;}
+  const heads=Array(10).fill(0),tails=Array(10).fill(0);PR.forEach(r=>lo(r).forEach(x=>{heads[+x[0]]++;tails[+x[1]]++;}));
+  p.innerHTML=card('🧪 頭尾數分布（末兩碼的十位數／個位數）',N+`<table class="tb"><tr><th>數字</th>${[...Array(10).keys()].map(i=>`<th>${i}</th>`).join('')}</tr><tr><td>十位（頭）</td>${heads.map(x=>`<td>${x}</td>`).join('')}</tr><tr><td>個位（尾）</td>${tails.map(x=>`<td>${x}</td>`).join('')}</tr></table>`);return;}
+ if(tab==='ord'){p.innerHTML=card('🎯 落球順序',`<p class="note">${H(GM[PV.r].name)}：來源未提供落球順序，無法統計。</p>`);return;}
+ if(tab==='sand'){p.innerHTML=card('🎲 沙盤浮字','<p class="note">越南彩不提供隨機選號功能。</p>');return;}
+ if(tab==='share'||tab==='mine'){p.innerHTML=card(tab==='share'?'🔥 熱門分享':'⭐ 我的號碼',`<p class="note">${H(GM[PV.r].name)}是 2–6 位數字獎號，不是選號型彩券；來源未提供選號分享資料，此分頁不適用。</p>`);return;}
+ ({other:rOther})[tab]&&rOther(p);}

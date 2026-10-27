@@ -116,3 +116,13 @@ function markMine(){const el=document.getElementById('mine'),out=document.getEle
   const mi=document.getElementById('mine');if(mi){mi.value=x.nums.join(' ');}const p=document.getElementById('pick');if(p){p.value=x.nums.length;}
   const go=()=>{if(!DD)return setTimeout(go,500);markMine();calc();const sec=document.querySelector(x.to==='bao'?'.sec-bao':'.sec-draw');if(sec)sec.scrollIntoView({behavior:'smooth'});};go();}catch(e){}}
 })();
+// 越南各省彩（北／中／南部）：資料來自 xskt.com.vn（非官方開獎站，標示備援）；只顯示已開完的完整一期
+const PROV_LINK={vnmb:'<a target="_blank" rel="noopener" href="https://xskt.com.vn/xsmb">xskt 北部開獎結果</a>',vnmt:'<a target="_blank" rel="noopener" href="https://xskt.com.vn/xsmt">xskt 中部開獎結果</a>',vnmn:'<a target="_blank" rel="noopener" href="https://xskt.com.vn/xsmn">xskt 南部開獎結果</a>'};
+const PROV_TIME={vnmb:'每天 台北 19:15（越南 18:15）開獎',vnmt:'每天 台北 18:15（越南 17:15）開獎',vnmn:'每天 台北 17:15（越南 16:15）開獎'};
+const PZ_NAME={DB:'特別獎',G1:'一獎',G2:'二獎',G3:'三獎',G4:'四獎',G5:'五獎',G6:'六獎',G7:'七獎',G8:'八獎'};
+function provCards(){fetch('/api/vnprov-latest').then(r=>r.ok?r.json():null).then(d=>{if(!d)return;for(const r of ['vnmn','vnmt','vnmb']){const x=d[r];if(!x)continue;const id='pn-'+r;let b=document.getElementById(id);
+ if(!b){b=document.createElement('div');b.id=id;b.className='drawbox gvn';const t=document.querySelector('.tops');const host=t||(document.getElementById('draws')||{}).parentNode;if(!host){setTimeout(provCards,2000);return;}host.append(b);}
+ if(!x.rows.length){b.innerHTML=`<div class="dh"><span class="gb">${ESC(x.name)}</span></div><p class="note">暫時取不到開獎資料</p>`;continue;}
+ b.innerHTML=`<div class="dh"><span class="gb">${ESC(x.name)}</span><span class="per">${ESC(x.date)}</span></div>`+x.rows.map(p=>`<div class="brow"><b>${ESC(p.prov)}</b>　特別獎 <b style="color:#fbbf24;font-size:18px">${ESC(p.prizes.DB.join(' '))}</b></div><details><summary>${ESC(p.prov)} 全部獎號</summary><table class="hist">${['DB','G1','G2','G3','G4','G5','G6','G7','G8'].filter(k=>p.prizes[k]).map(k=>`<tr><td>${PZ_NAME[k]}</td><td>${p.prizes[k].map(ESC).join(' ')}</td></tr>`).join('')}</table></details>`).join('')+
+ metaBox('📺 '+PROV_TIME[r]+'｜號碼以越南各省彩券公司公布為準｜'+PROV_LINK[r],'資料來源：xskt.com.vn（備援，請以官方為準）','');}}).catch(()=>{});}
+provCards();setInterval(provCards,5*60e3);
