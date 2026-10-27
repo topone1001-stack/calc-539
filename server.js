@@ -14,7 +14,7 @@ app.use(require('compression')());app.use(express.urlencoded({extended:false,lim
 app.use(session({store,secret:S.get('secret'),resave:false,saveUninitialized:false,name:'calc.sid',rolling:true,cookie:{httpOnly:true,sameSite:'lax',secure:PROD?true:'auto',maxAge:4*3600e3}}));
 // 同源檢查：所有寫入要求的 Origin/Referer 必須是本站
 app.use((q,s,n)=>{if(q.method==='GET'||q.method==='HEAD'||q.path==='/cron')return n();const o=q.get('Origin')||q.get('Referer')||'';if(!o)return n();try{if(new URL(o).host===q.get('host'))return n();}catch(e){}susp(q,'跨站寫入被擋',o.slice(0,80));s.status(403).send('403');});
-const apiLimit=rateLimit({windowMs:60e3,limit:150,standardHeaders:true,legacyHeaders:false});app.use(['/api','/draws','/me','/admin','/stats'],apiLimit);
+const apiLimit=rateLimit({windowMs:60e3,limit:+process.env.API_LIMIT_OVERRIDE||150,standardHeaders:true,legacyHeaders:false});app.use(['/api','/draws','/me','/admin','/stats'],apiLimit);
 const FEATS=[['bao','包牌'],['col','立柱'],['car','車'],['prize','獎金'],['draw','開獎試算'],['hist','歷史開獎'],['stats','號碼統計'],['adv','進階分析'],['mynum','我的號碼'],['share','熱門分享'],['fun','沙盤浮字'],['other','3星/4星/Bingo']];
 const ALL=FEATS.map(f=>f[0]);
 const norm=(name,u)=>{const role=u.role||(name==='admin'?'admin':'user');return {hash:u.hash,parent:u.parent||'',created:u.created||'',createdBy:u.createdBy||'',role,enabled:u.enabled!==false,expires:u.expires||'',perms:role==='admin'?ALL.slice():(Array.isArray(u.perms)?u.perms:ALL.slice()),sets:u.sets||[]};};

@@ -7,7 +7,9 @@ exports.GAMES=GAMES;
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const pool=()=>S.pg();
 let mem={};// game -> sorted rows [period,date,nums,special]
-async function init(){if(!pool())return;await pool().query(`CREATE TABLE IF NOT EXISTS draws(game text, period text, ddate date, nums smallint[] NOT NULL, special smallint, PRIMARY KEY(game,period))`);await load();}
+// 僅本機測試：無資料庫且設 HIST_FAKE=1 時產生假歷史資料（正式環境不設）
+function fake(){let z=12345;const rnd=k=>{z=(z*1103515245+12345)%2147483648;return 1+z%k;};for(const g of Object.keys(GAMES)){const G=GAMES[g],max=g==='lotto'||g==='hk'?49:g==='super'?38:39,rows=[];for(let i=0;i<1200;i++){const d=new Date(Date.now()-(1200-i)*864e5).toISOString().slice(0,10);const a=new Set();while(a.size<G.n)a.add(rnd(max));const per=g==='hk'?d.slice(0,4)+'/'+String(i%150+1).padStart(3,'0'):String(115000000+i+1);rows.push([per,d,[...a].sort((p,q)=>p-q),G.sp?rnd(g==='super'?8:max):null]);}mem[g]=rows;}built={};}
+async function init(){if(!pool()){if(process.env.HIST_FAKE)fake();return;}await pool().query(`CREATE TABLE IF NOT EXISTS draws(game text, period text, ddate date, nums smallint[] NOT NULL, special smallint, PRIMARY KEY(game,period))`);await load();}
 async function load(){if(!pool())return;const r=await pool().query('SELECT game,period,to_char(ddate,\'YYYY-MM-DD\') d,nums,special FROM draws ORDER BY game,ddate,period');mem={};for(const x of r.rows)(mem[x.game]=mem[x.game]||[]).push([x.period,x.d,x.nums,x.special]);built={};}
 async function put(game,rows){if(!pool()||!rows.length)return 0;let n=0;for(let i=0;i<rows.length;i+=500){const ch=rows.slice(i,i+500),v=[],ps=[];ch.forEach((r,j)=>{ps.push(`($${j*5+1},$${j*5+2},$${j*5+3},$${j*5+4},$${j*5+5})`);v.push(game,String(r.period),r.date,r.nums,r.special==null?null:r.special);});
  const q=await pool().query(`INSERT INTO draws(game,period,ddate,nums,special) VALUES ${ps.join(',')} ON CONFLICT DO NOTHING`,v);n+=q.rowCount;}return n;}

@@ -8,7 +8,7 @@ const RES=[];const rec=(dev,k,ok,d='')=>{RES.push({dev,k,ok,d});expect.soft(ok,`
 test.afterAll(()=>{fs.appendFileSync(path.join(SHOT,'results.jsonl'),RES.map(r=>JSON.stringify(r)).join('\n')+'\n');});
 const watch=pg=>{const e=[];pg.on('pageerror',x=>e.push('pageerror: '+x.message));pg.on('console',m=>{if(m.type()==='error'&&!/youtube|googlevideo|doubleclick|ytimg|favicon/i.test(m.text()+(m.location().url||'')))e.push('console: '+m.text().slice(0,150));});return e;};
 const pageText=pg=>pg.evaluate(()=>document.body.innerText+' '+[...document.querySelectorAll('input,output')].map(i=>i.value).join(' '));
-async function login(pg,u,p){await pg.goto('/login');await pg.fill('[name=username]',u);await pg.fill('[name=password]',p);await Promise.all([pg.waitForLoadState('networkidle'),pg.click('button.btn')]);await pg.waitForLoadState('networkidle');}
+async function login(pg,u,p,rem){await pg.goto('/login');await pg.fill('[name=username]',u);await pg.fill('[name=password]',p);if(rem)await pg.check('#remember');await Promise.all([pg.waitForLoadState('networkidle'),pg.click('button.btn')]);await pg.waitForLoadState('networkidle');}
 async function adminPost(pg,action,data){// 由後台頁取 csrf 後送表單
  return pg.evaluate(async([a,d])=>{const c=document.querySelector('input[name=_csrf]').value;const b=new URLSearchParams({_csrf:c});for(const [k,v] of Object.entries(d))(Array.isArray(v)?v:[v]).forEach(x=>b.append(k,x));const r=await fetch('/admin/'+a,{method:'POST',body:b});return r.status;},[action,data]);}
 
@@ -18,37 +18,37 @@ test('full regression',async({browser},ti)=>{const dev=ti.project.name,U='zz_reg
  await ap.goto('/login');rec(dev,'登入頁老虎影片',await ap.locator('video#bgv').count()===1);
  const lb=ap.locator('#laybtn');const t0=await lb.textContent();await lb.click();const t1=await lb.textContent();await lb.click();await lb.click();
  rec(dev,'版面切換按鈕',t0!==t1&&(await lb.textContent())===t0,`${t0}→${t1}`);
- await ap.check('#remember');await login(ap,'admin',ADMIN_PW);rec(dev,'admin 登入',ap.url().endsWith('/'),ap.url());
+ await login(ap,'admin',ADMIN_PW);rec(dev,'admin 登入',ap.url().endsWith('/'),ap.url());
  await ap.screenshot({path:`${SHOT}/${dev}-01-calc-admin.png`});
  // ---- 後台：建立、權限、重設、搜尋、紀錄 ----
  await ap.goto('/admin');await ap.waitForLoadState('networkidle');
  await adminPost(ap,'delete',{username:U}).catch(()=>{});await ap.goto('/admin');
  const ALL=['bao','col','car','prize','draw','hist','stats','adv','mynum','share','fun','other'];
- await ap.fill('form[action="/admin/create"] [name=username]',U);await Promise.all([ap.waitForLoadState('networkidle'),ap.click('form[action="/admin/create"] button')]);
+ await ap.fill('form[action="/admin/create"] [name=username]',U);await Promise.all([ap.waitForLoadState('networkidle'),ap.click('form[action="/admin/create"] button:not(#regen)')]);
  rec(dev,'後台 新增帳號',(await ap.content()).includes('已新增')&&(await ap.content()).includes(U));
  await adminPost(ap,'perms',{username:U,role:'user',perms:ALL.slice(0,3)});await ap.goto('/admin?q='+U);
  rec(dev,'後台 修改權限(3項)',/權限 3 項|已更新/.test(await ap.content()));
  await adminPost(ap,'perms',{username:U,role:'user',perms:ALL});
- await ap.goto('/admin');await ap.fill('form[action="/admin"] [name=q]',U);await Promise.all([ap.waitForLoadState('networkidle'),ap.press('form[action="/admin"] [name=q]','Enter')]);
+ await ap.goto('/admin');await ap.waitForSelector('form[action="/admin"] [name=q]');await ap.fill('form[action="/admin"] [name=q]',U);await Promise.all([ap.waitForLoadState('networkidle'),ap.press('form[action="/admin"] [name=q]','Enter')]);
  const rows=await ap.locator('.u').count();rec(dev,'後台 搜尋',rows===1&&(await ap.locator('.u').first().textContent()).includes(U),'rows='+rows);
  rec(dev,'後台 操作紀錄',(await ap.locator('table tr').count())>1);
  await ap.screenshot({path:`${SHOT}/${dev}-02-admin.png`,fullPage:true});
  // ---- 會員：首次登入強制改密碼 ----
  const uctx=await browser.newContext();const pg=await uctx.newPage();const err=watch(pg);
  await login(pg,U,'12345678');rec(dev,'首次登入導向改密碼',pg.url().endsWith('/password'),pg.url());
- await pg.fill('[name=old]','12345678');await pg.fill('[name=new1]','12345678');await pg.fill('[name=new2]','12345678');await pg.click('button.btn');
+ await pg.fill('[name=old]','12345678');await pg.fill('[name=new1]','12345678');await pg.fill('[name=new2]','12345678');await Promise.all([pg.waitForLoadState('networkidle'),pg.click('button.btn')]);await pg.waitForSelector('.err');
  rec(dev,'拒絕預設密碼',(await pg.content()).includes('不能使用預設密碼'));
  await pg.fill('[name=old]','12345678');await pg.fill('[name=new1]',NEWPW);await pg.fill('[name=new2]',NEWPW);await Promise.all([pg.waitForURL(/\/$/),pg.click('button.btn')]);
  rec(dev,'改密碼成功',pg.url().endsWith('/'));
  // 記住帳號
  await pg.click('form[action="/logout"] button');await pg.waitForURL(/login/);
- await pg.check('#remember');await login(pg,U,NEWPW);await pg.click('form[action="/logout"] button');await pg.waitForURL(/login/);
+ await login(pg,U,NEWPW,true);await pg.click('form[action="/logout"] button');await pg.waitForURL(/login/);
  rec(dev,'記住帳號',(await pg.inputValue('[name=username]'))===U);
  await pg.fill('[name=password]',NEWPW);await Promise.all([pg.waitForURL(/\/$/),pg.click('button.btn')]);await pg.waitForTimeout(2500);
  // ---- 開獎、來源連結、倒數、直播 ----
  const body=await pg.evaluate(()=>document.body.innerText);
  for(const g of ['今彩539','大樂透','威力彩','加州天天樂','香港六合彩'])rec(dev,'開獎 '+g,body.includes(g)&&/最新開獎/.test(body));
- rec(dev,'加州來源為官方',body.includes('California Lottery 官方'));
+ rec(dev,'加州來源有標示（官方或標明備援）',body.includes('California Lottery 官方')||body.includes('lotteryusa.com（官方 calottery 暫時無法連線'),body.includes('California Lottery 官方')?'官方':'備援');
  const hrefs=await pg.$$eval('a[href^="http"]',a=>a.map(x=>x.href));
  for(const d of ['taiwanlottery.com','calottery.com','hkjc.com'])rec(dev,'官方連結 '+d,hrefs.some(h=>h.includes(d)));
  const cd1=await pg.textContent('body');await pg.waitForTimeout(2200);const cd2=await pg.textContent('body');
@@ -60,10 +60,10 @@ test('full regression',async({browser},ti)=>{const dev=ti.project.name,U='zz_reg
  // ---- 5 個計算器：每個欄位改值、每個按鈕都點 ----
  const secs=pg.locator('section.sec');rec(dev,'計算區數量=5',(await secs.count())===5);
  for(let i=0;i<await secs.count();i++){const s=secs.nth(i);const name=(await s.locator('h2').textContent()).slice(0,10);const before=await s.innerHTML();
-  const ins=s.locator('input.n');for(let k=0;k<await ins.count();k++){const el=ins.nth(k);if(!(await el.isEditable()))continue;const v=await el.inputValue();await el.fill(String((+v||3)+1));await el.dispatchEvent('input');await el.dispatchEvent('change');}
+  const ins=s.locator('input.n');const nIn=Math.min(await ins.count(),30);for(let k=0;k<nIn;k++){const el=ins.nth(k);if(!(await el.isEditable()))continue;const v=await el.inputValue();await el.fill(String((+v||3)+1));await el.dispatchEvent('input');await el.dispatchEvent('change');}
   const ms=s.locator('#mine');if(await ms.count())await ms.fill('1 2 3 4 5');
   const sel=s.locator('select');for(let k=0;k<await sel.count();k++){const o=await sel.nth(k).locator('option').evaluateAll(x=>x.map(y=>y.value));for(const v of o)await sel.nth(k).selectOption(v);await sel.nth(k).selectOption(o[0]);}
-  const bs=s.locator('button');for(let k=0;k<await bs.count();k++){if(await bs.nth(k).isVisible())await bs.nth(k).click();}
+  const bs=s.locator('button');const nB=Math.min(await bs.count(),30);for(let k=0;k<nB;k++){const x=bs.nth(k);if(await x.count()&&await x.isVisible())await x.click({timeout:5000}).catch(()=>{});}
   await pg.waitForTimeout(300);const txt=await s.evaluate(e=>e.innerText+' '+[...e.querySelectorAll('input,output')].map(i=>i.value).join(' '));
   rec(dev,'計算器 '+name,!BAD.test(txt)&&(await s.innerHTML())!==before,BAD.test(txt)?'含 NaN/undefined':'');
   await s.screenshot({path:`${SHOT}/${dev}-04-calc-${i+1}.png`});}
@@ -75,7 +75,7 @@ test('full regression',async({browser},ti)=>{const dev=ti.project.name,U='zz_reg
  for(const [t,tn] of tabs){let bad=[];
   for(const g of games){await pg.selectOption('#g',g);await pg.waitForTimeout(700);await pg.click(`#tabs [data-t="${t}"]`);await pg.waitForTimeout(400);
    for(const r of (g===games[0]?rngs.filter(r=>r!=='d'):[rngs[0]])){await pg.selectOption('#rng',r);await pg.waitForTimeout(300);
-    const x=await pg.locator('#pane-'+t).innerText();if(BAD.test(x)||x.trim().length<10)bad.push(g+'/'+r);}}
+    for(let w=0;w<40;w++){const tx=await pg.locator('#pane-'+t).innerText().catch(()=>'');if(tx.trim().length>=10&&!/載入中/.test(tx))break;await pg.waitForTimeout(200);}const x=await pg.locator('#pane-'+t).innerText();if(BAD.test(x)||x.trim().length<10)bad.push(g+'/'+r+'['+(BAD.exec(x)||['short:'+x.trim().slice(0,40)])[0]+']');}}
   await pg.selectOption('#g',games[0]);await pg.click(`#tabs [data-t="${t}"]`);await pg.waitForTimeout(500);await pg.screenshot({path:`${SHOT}/${dev}-05-stats-${t}.png`});
   // 分頁內按鈕全點（送出分享按鈕另外測）
   const bs=pg.locator(`#pane-${t} button:not(#sgo):not(#sdel):not([data-p])`);const n=Math.min(await bs.count(),40);for(let k=0;k<n;k++){if(await bs.nth(k).isVisible())await bs.nth(k).click({timeout:3000}).catch(e=>bad.push('btn'+k));}

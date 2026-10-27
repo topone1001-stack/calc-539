@@ -8,3 +8,4 @@ screens/
 *.log
 .env
 .cron_token
+QA_TESTER_PASSWORD.txt
