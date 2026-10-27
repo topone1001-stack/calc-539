@@ -65,7 +65,10 @@ function panel(k,d,extra,note){const G=GAMES[k],x=gameData(k,d),L=x.latest;const
  const m=curGame()===k?mine():[],hit=L.nums.filter(n=>m.includes(n));
  b.innerHTML=`<div class="dh"><span class="gb">${G.name}</span><span class="per">第 ${ESC(L.period)} 期</span></div><div class="dd">最新開獎・${ESC(L.date)}</div><div class="brow">${balls(L.nums,hit,L.special)}${L.special!=null?`<span class="splabel">${G.sp}</span>`:''}</div>${ordLine(L)}${extra||''}`+
  `<details><summary>近 ${x.hist.length} 期開獎</summary><table class="hist">${x.hist.map(h=>`<tr><td>${ESC(h.period)}</td><td>${ESC(h.date)}</td><td>${h.nums.map(pad).join(' ')}${h.special!=null?' ＋'+pad(h.special):''}</td></tr>`).join('')}</table></details>`+
- metaBox(note,'資料來源：'+(x.src==='lotteryusa'?'lotteryusa.com（備援，請以官方為準）':x.src==='official'?G.src+' 官方':x.src==='magayo'?'magayo.com（備援，請以官方為準）':G.src),x.updated?'更新：'+new Date(x.updated).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'}):'');}
+ metaBox(note,'資料來源：'+srcLabel(k,G,L,x),x.updated?'更新：'+new Date(x.updated).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'}):'');}
+// 資料來源：以「最新一期」實際抓到的來源為準（每期存 src），沒有就用整包的 src；台彩、六合彩只抓官方
+const ALT={lotteryusa:'lotteryusa.com',magayo:'magayo.com',xoso:'xoso.com.vn'};
+function srcLabel(k,G,L,x){const s=(L&&L.src)||x.src||(['539','lotto','super','hk'].includes(k)?'official':'');return s==='official'?G.src+' 官方':ALT[s]?ALT[s]+'（備援，請以官方為準）':'來源未標示（請以官方為準）';}
 // 卡片底部說明：拆成短的小灰字行（開獎時間／號碼與連結／資料來源／更新時間）
 function metaBox(note,src,upd){const seg=(note||'').split('｜').filter(Boolean),t=seg.filter(x=>/開獎/.test(x)&&!x.includes('href=')),o=seg.filter(x=>!t.includes(x));
  return `<div class="meta">${t.map(x=>`<div>${x}</div>`).join('')}${o.length?`<div>${o.join('・')}</div>`:''}<div>${src}</div>${upd?`<div>${upd}</div>`:''}</div>`;}
