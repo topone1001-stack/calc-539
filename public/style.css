@@ -89,3 +89,9 @@ a.btn[href="/stats"]{display:inline-flex!important;align-items:center;min-height
 #addc{min-height:44px}
 #cols .btn{min-width:44px;min-height:44px}
 #game{min-height:44px;font-size:16px!important;padding:6px 10px!important}
+/* ---- 統計頁點按 ≥44px ---- */
+p>a[href="/"]{display:inline-flex;align-items:center;min-height:44px;padding:0 4px}
+#g,#rng{min-height:44px;font-size:16px!important}
+#tosend,#tobao,#toclr,#hsort,#hview{min-height:44px}
+#tabs>*{min-height:44px;display:inline-flex;align-items:center}
+[id^="hp"]:is(button){min-width:44px;min-height:44px}
