@@ -84,3 +84,8 @@ body{position:relative;padding-bottom:calc(76px + env(safe-area-inset-bottom))}
 #livebox .vbtn{display:inline-flex;align-items:center;min-height:44px;padding:0 14px}
 .top a[href="/password"]{display:inline-flex;align-items:center;min-height:44px;padding:0 12px;background:#334155;color:#e2e8f0;border-radius:8px;text-decoration:none}
 .top button{min-height:44px}
+/* ---- 首頁點按 ≥44px ---- */
+a.btn[href="/stats"]{display:inline-flex!important;align-items:center;min-height:44px}
+#addc{min-height:44px}
+#cols .btn{min-width:44px;min-height:44px}
+#game{min-height:44px;font-size:16px!important;padding:6px 10px!important}
