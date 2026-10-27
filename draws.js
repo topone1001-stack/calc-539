@@ -46,8 +46,17 @@ const HKP=['頭獎','二獎','三獎','四獎','五獎','六獎','七獎'];
 async function refreshHK(){hkLast=Date.now();try{const r=await fetch('https://info.cld.hkjc.com/graphql/base/',{method:'POST',headers:{'Content-Type':'application/json','User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36','Origin':'https://bet.hkjc.com','Referer':'https://bet.hkjc.com/'},body:JSON.stringify({operationName:'marksixResult',variables:{lastNDraw:20,drawType:'All'},query:HKQ}),signal:AbortSignal.timeout(20000)});
  const j=await r.json();const d=(j.data&&j.data.lotteryDraws)||[];if(!d.length)throw new Error(JSON.stringify(j.errors||'empty'));
  const hist=d.filter(x=>x.drawResult&&x.drawResult.drawnNo&&x.drawResult.drawnNo.length===6).map(x=>({period:x.year+'/'+String(x.no).padStart(3,'0'),date:x.drawDate.slice(0,10),nums:x.drawResult.drawnNo.slice().sort((a,b)=>a-b),special:x.drawResult.xDrawnNo,snowball:x.snowballName_ch||''}));
+ await hkOrder(hist,(cache.hk&&cache.hk.hist)||[]);
  const L=d.find(x=>x.drawResult&&x.drawResult.drawnNo&&x.drawResult.drawnNo.length===6),pool=L&&L.lotteryPool||{};
  cache.hk={updated:new Date().toISOString(),latest:hist[0],hist:hist.slice(0,20),turnover:pool.totalInvestment,jackpotCarry:pool.jackpot,prizes:(pool.lotteryPrizes||[]).map(p=>({name:HKP[p.type-1]||('第'+p.type+'獎'),units:p.winningUnit,dividend:p.dividend}))};save();console.log('hk updated',hist[0]&&hist[0].period);}catch(e){console.error('hk fetch failed:',e.message);}}
+// 六合彩落球順序：HKJC API 只給排序後號碼，改從台灣的彩六軟體線上（biga）歷史表取「落球順序」；
+// 只有在排序後跟 HKJC 官方號碼和特別號完全一致時才採用，不一致就不顯示（不自己編）
+const HKORD='https://mark6online.biga.com.tw/6/MARK6/%E5%AF%A6%E7%94%A8%E7%B5%B1%E8%A8%88%EF%BC%8D%E6%AD%B7%E5%8F%B2%E9%96%8B%E7%8D%8E%E8%99%9F%E7%A2%BC.php';
+function parseHKOrder(t){const m=new Map();for(const r of t.matchAll(/<td>\d{4}\/\d{2}\/\d{2}<\/td><td>[^<]*<\/td><td>(\d{2})\/(\d{3})<\/td>(?:<td>[^<]*<\/td>){3}((?:<td>\d{1,2}<\/td>){7})/g)){const n=(r[3].match(/\d+/g)||[]).map(Number);m.set('20'+r[1]+'/'+r[2],{order:n.slice(0,6),special:n[6]});}return m;}
+async function hkOrder(hist,old){const keep=new Map(old.filter(x=>x.order).map(x=>[x.period,x.order]));let M=new Map();
+ try{const r=await fetch(HKORD,{headers:{'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36'},signal:AbortSignal.timeout(15000)});if(r.ok)M=parseHKOrder(await r.text());}catch(e){console.error('hk order failed:',e.message);}
+ for(const x of hist){const o=M.get(x.period);if(o&&o.special===x.special&&o.order.slice().sort((a,b)=>a-b).join()===x.nums.join())x.order=o.order;else if(keep.has(x.period))x.order=keep.get(x.period);}}
+exports._parseHKOrder=parseHKOrder;
 function tickHK(){const d=tpe(),hm=d.getUTCHours()*60+d.getUTCMinutes();if((hm>=21*60+15&&hm<=22*60+30)||Date.now()-hkLast>=60*60e3-30e3)refreshHK();}
 async function refreshOther(){try{const m=tpe().toISOString().slice(0,7),o={};
  for(const [k,ep,key] of [['d3','3DResult','lotto3DRes'],['d4','4DResult','lotto4DRes']]){const j=await (await fetch(`${API}${ep}?period&month=${m}&pageNum=1&pageSize=10`,{signal:AbortSignal.timeout(15000)})).json();o[k]=(j.content[key]||[]).sort((a,b)=>b.period-a.period).slice(0,10).map(x=>({period:x.period,date:x.lotteryDate.slice(0,10),nums:x.drawNumberAppear}));}
