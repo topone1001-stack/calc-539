@@ -74,7 +74,7 @@ function drawBox(d){const old=document.getElementById('draws');if(!old)return;ol
   '📺 開獎時間台北約 09:30（11/1 起約 10:30）｜號碼以加州彩券公布為準｜<a target="_blank" rel="noopener" href="https://www.lotterywang.com/lottoCA5" style="color:#60a5fa">加州開獎結果</a>');
  const h=d.hk;panel('hk',d,h?`<p class="note">投注額 HK$${fmt(h.turnover)}${h.latest&&h.latest.snowball?'｜'+h.latest.snowball:''}</p><details><summary>派彩表</summary><table class="prz"><tr><th>獎項</th><th>中獎注數</th><th>每注派彩</th></tr>${(h.prizes||[]).map(p=>`<tr><td>${p.name}</td><td>${fmt(p.units)}</td><td>HK$${fmt(p.dividend)}</td></tr>`).join('')}</table></details>`:'',
   '📺 開獎：每週二、四、六或日 21:30（香港＝台北時間）｜號碼以官方網站公布為準｜<a target="_blank" rel="noopener" href="https://bet.hkjc.com/ch/marksix/results" style="color:#d8b4fe">馬會官方結果</a>');
- const VL='｜號碼以 Vietlott 官方公布為準｜<a target="_blank" rel="noopener" href="https://www.magayo.com/zht/lotto-results/vietnam/%m/" style="color:#4ade80">越南開獎結果</a>（官網 vietlott.vn 部分網路可能打不開）';
+ const VL='｜號碼以 Vietlott 官方公布為準｜<a target="_blank" rel="noopener" href="https://www.magayo.com/zht/lotto-results/vietnam/%m/" style="color:#4ade80">越南開獎結果</a>';
  panel('vn655',d,'','📺 開獎：每週二、四、六 台北 19:00（越南 18:00）'+VL.replace('%m','power-655'));
  panel('vn645',d,'','📺 開獎：每週三、五、日 台北 19:00（越南 18:00）'+VL.replace('%m','mega-645'));
  panel('vn535',d,'','📺 開獎：每天 台北 14:00、22:00（越南 13:00、21:00）'+VL.replace('%m','lotto-535-2100'));
