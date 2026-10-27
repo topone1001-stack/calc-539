@@ -67,7 +67,7 @@ function panel(k,d,extra,note){const G=GAMES[k],x=gameData(k,d),L=x.latest;const
  `<details><summary>近 ${x.hist.length} 期開獎</summary><table class="hist">${x.hist.map(h=>`<tr><td>${ESC(h.period)}</td><td>${ESC(h.date)}</td><td>${h.nums.map(pad).join(' ')}${h.special!=null?' ＋'+pad(h.special):''}</td></tr>`).join('')}</table></details>`+
  metaBox(note,'資料來源：'+(x.src==='lotteryusa'?'lotteryusa.com（備援，請以官方為準）':x.src==='official'?G.src+' 官方':x.src==='magayo'?'magayo.com（備援，請以官方為準）':G.src),x.updated?'更新：'+new Date(x.updated).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'}):'');}
 // 卡片底部說明：拆成短的小灰字行（開獎時間／號碼與連結／資料來源／更新時間）
-function metaBox(note,src,upd){const seg=(note||'').split('｜').filter(Boolean),t=seg.filter(x=>/開獎/.test(x)&&!/<a /.test(x)),o=seg.filter(x=>!t.includes(x));
+function metaBox(note,src,upd){const seg=(note||'').split('｜').filter(Boolean),t=seg.filter(x=>/開獎/.test(x)&&!x.includes('href=')),o=seg.filter(x=>!t.includes(x));
  return `<div class="meta">${t.map(x=>`<div>${x}</div>`).join('')}${o.length?`<div>${o.join('・')}</div>`:''}<div>${src}</div>${upd?`<div>${upd}</div>`:''}</div>`;}
 function drawBox(d){const old=document.getElementById('draws');if(!old)return;old.style.display='none';
  panel('539',d,'','每週一至六 20:30 開獎（全民i彩券直播）｜號碼以官方網站公布為準｜<a target="_blank" rel="noopener" href="https://www.taiwanlottery.com/" style="color:#fdba74">台灣彩券官網</a>');
