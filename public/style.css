@@ -54,3 +54,4 @@ html.lay-d .secs{gap:0 16px}
 .gvn .gb{background:#16a34a}.gvn .ball{background:#4ade80;color:#052e16}.gvn .ball.sp{background:#facc15;color:#1c1400}.gvn .hist td{border-color:#14532d}.gvn summary{color:#86efac}
 
 .ordrow{display:flex;flex-wrap:nowrap;align-items:center;gap:2px;margin-top:4px;overflow-x:auto;white-space:nowrap}.ordlb{font-size:11px;color:#94a3b8;margin-right:4px}.ball.mini{min-width:21px;padding:3px 0;margin:1px;font-size:11px}
+.ball.sp.mini,.ghk .ball.sp.mini,.gvn .ball.sp.mini{background:#dc2626;color:#fff}
