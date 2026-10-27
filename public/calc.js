@@ -61,11 +61,14 @@ function mine(){const el=document.getElementById('mine');if(!el)return[];const m
 const fmt=n=>n==null||n===''?'—':Number(n).toLocaleString('zh-TW');
 function panel(k,d,extra,note){const G=GAMES[k],x=gameData(k,d),L=x.latest;const id='pn-'+k;let b=document.getElementById(id);
  if(!b){b=document.createElement('div');b.id=id;b.className='drawbox '+G.cls;const t=document.querySelector('.tops');(t||document.getElementById('draws').parentNode).append(b);}
- if(!L){b.innerHTML=`<span class="gb">${G.name}</span><p class="note">暫時取不到開獎資料</p>`;return;}
+ if(!L){b.innerHTML=`<div class="dh"><span class="gb">${G.name}</span></div><p class="note">暫時取不到開獎資料</p>`;return;}
  const m=curGame()===k?mine():[],hit=L.nums.filter(n=>m.includes(n));
- b.innerHTML=`<span class="gb">${G.name}</span> <b>最新開獎</b>　第 ${ESC(L.period)} 期　${ESC(L.date)}<div>${balls(L.nums,hit,L.special)}${L.special!=null?`<span class="splabel">${G.sp}</span>`:''}</div>${ordLine(L)}${extra||''}`+
+ b.innerHTML=`<div class="dh"><span class="gb">${G.name}</span><span class="per">第 ${ESC(L.period)} 期</span></div><div class="dd">最新開獎・${ESC(L.date)}</div><div class="brow">${balls(L.nums,hit,L.special)}${L.special!=null?`<span class="splabel">${G.sp}</span>`:''}</div>${ordLine(L)}${extra||''}`+
  `<details><summary>近 ${x.hist.length} 期開獎</summary><table class="hist">${x.hist.map(h=>`<tr><td>${ESC(h.period)}</td><td>${ESC(h.date)}</td><td>${h.nums.map(pad).join(' ')}${h.special!=null?' ＋'+pad(h.special):''}</td></tr>`).join('')}</table></details>`+
- `<p class="note">${note?note+'｜':''}資料來源：${x.src==='lotteryusa'?'lotteryusa.com（官方 calottery 暫時無法連線，備援來源，請以官方網站為準）':x.src==='official'?G.src+' 官方':x.src==='magayo'?'magayo.com（官方 vietlott.vn 擋連線，備援來源，請以官方網站為準）':G.src}${x.updated?'｜更新：'+new Date(x.updated).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'}):''}</p>`;}
+ metaBox(note,'資料來源：'+(x.src==='lotteryusa'?'lotteryusa.com（備援，請以官方為準）':x.src==='official'?G.src+' 官方':x.src==='magayo'?'magayo.com（備援，請以官方為準）':G.src),x.updated?'更新：'+new Date(x.updated).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'}):'');}
+// 卡片底部說明：拆成短的小灰字行（開獎時間／號碼與連結／資料來源／更新時間）
+function metaBox(note,src,upd){const seg=(note||'').split('｜').filter(Boolean),t=seg.filter(x=>/開獎/.test(x)&&!/<a /.test(x)),o=seg.filter(x=>!t.includes(x));
+ return `<div class="meta">${t.map(x=>`<div>${x}</div>`).join('')}${o.length?`<div>${o.join('・')}</div>`:''}<div>${src}</div>${upd?`<div>${upd}</div>`:''}</div>`;}
 function drawBox(d){const old=document.getElementById('draws');if(!old)return;old.style.display='none';
  panel('539',d,'','每週一至六 20:30 開獎（全民i彩券直播）｜號碼以官方網站公布為準｜<a target="_blank" rel="noopener" href="https://www.taiwanlottery.com/" style="color:#fdba74">台灣彩券官網</a>');
  panel('lotto',d,'','每週二、五 20:30 開獎（同上直播）｜號碼以官方網站公布為準｜<a target="_blank" rel="noopener" href="https://www.taiwanlottery.com/" style="color:#fdba74">台灣彩券官網</a>');
