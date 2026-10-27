@@ -73,3 +73,14 @@ html.lay-d .secs{gap:0 16px}
 #laybtn{right:max(12px,env(safe-area-inset-right));bottom:calc(12px + env(safe-area-inset-bottom));padding:6px 10px;font-size:12px;opacity:.85}
 body{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
 .lay-d .drawbox{padding:14px 16px}
+/* ---- 手機點按尺寸 ≥40px（前端開發）---- */
+#laybtn{min-height:40px;min-width:40px;padding:8px 10px;font-size:12px;line-height:22px;opacity:.55;transition:opacity .2s}
+#laybtn:hover,#laybtn:focus-visible,#laybtn.on{opacity:1}
+body{padding-bottom:calc(72px + env(safe-area-inset-bottom))}
+.drawbox summary{display:flex;align-items:center;min-height:40px;padding:6px 2px;cursor:pointer;list-style-position:inside}
+.drawbox summary::before{content:'▸';margin-right:6px}.drawbox details[open]>summary::before{content:'▾'}
+.drawbox summary::-webkit-details-marker{display:none}.drawbox summary{list-style:none}
+.drawbox .note a,.drawbox .meta a{display:inline-flex;align-items:center;min-height:40px;padding:0 10px;margin:2px 2px;border:1px solid #475569;border-radius:16px;background:#1e293b;color:#93c5fd;text-decoration:none;font-size:12.5px}
+#livebox .vbtn{display:inline-flex;align-items:center;min-height:40px;padding:0 14px}
+.top a[href="/password"]{display:inline-flex;align-items:center;min-height:40px;padding:0 12px;background:#334155;color:#e2e8f0;border-radius:8px;text-decoration:none}
+.top button{min-height:40px}
