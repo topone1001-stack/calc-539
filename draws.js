@@ -55,6 +55,14 @@ async function refreshOther(){try{const m=tpe().toISOString().slice(0,7),o={};
  o.bingo=((j.content&&j.content.bingoQueryResult)||[]).slice(0,10).map(x=>({period:x.drawTerm,nums:(x.bigShowOrder||[]).map(Number).sort((a,b)=>a-b),super:x.bullEyeTop!=null&&x.bullEyeTop!=='－'?+x.bullEyeTop:null}));
  o.updated=new Date().toISOString();cache.other=o;save();}catch(e){console.error('other fetch failed:',e.message);}}
 exports.refreshOther=refreshOther;
-exports.start=()=>{refreshOther();setInterval(refreshOther,5*60e3);refreshHK();setInterval(tickHK,10*60e3);refreshCA();setInterval(tickCA,10*60e3);cache=S.get('draws')||cache;videos();setInterval(videos,15*60e3);last=Date.now();refresh();setInterval(tick,10*60e3);};
+// ---- 即時更新：開獎時段每 1–2 分鐘問官方，直到新一期出現 ----
+const SC=require('./sched');let ver='';const listeners=[];const lastTry={tw:0,ca:0,hk:0};
+const RUN={tw:()=>refresh(),ca:()=>refreshCA(),hk:()=>refreshHK()};
+function bump(){const v=SC.verOf(cache);if(v===ver)return false;const was=ver;ver=v;cache.ver=v;if(!was)return false;listeners.forEach(f=>{try{f(v)}catch(e){console.error('onNew',e.message);}});return true;}
+async function fast(now=Date.now()){for(const s of ['tw','ca','hk']){const st=SC.status(s,now,cache);if(!st.wait||now-lastTry[s]<SC.EVERY[s]-5e3)continue;lastTry[s]=now;
+  try{await RUN[s]();}catch(e){}if(bump())console.log('new draw',s,ver);}}
+exports.fast=fast;exports.onNew=f=>listeners.push(f);exports.ver=()=>ver||SC.verOf(cache);exports.live=()=>SC.anyWaiting(Date.now(),cache);
+exports._setCache=c=>{cache=c;};exports._run=RUN;
+exports.start=()=>{setInterval(()=>fast().catch(()=>{}),30e3);setInterval(bump,60e3);refreshOther();setInterval(refreshOther,5*60e3);refreshHK();setInterval(tickHK,10*60e3);refreshCA();setInterval(tickCA,10*60e3);cache=S.get('draws')||cache;videos();setInterval(videos,15*60e3);last=Date.now();refresh();setInterval(tick,10*60e3);};
 exports.get=()=>cache;
-exports.refreshAll=async()=>{await Promise.allSettled([refresh(),refreshCA(),refreshHK(),refreshOther(),videos()]);return cache;};
+exports.refreshAll=async()=>{await Promise.allSettled([refresh(),refreshCA(),refreshHK(),refreshOther(),videos()]);bump();return cache;};
