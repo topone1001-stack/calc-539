@@ -95,3 +95,7 @@ p>a[href="/"]{display:inline-flex;align-items:center;min-height:44px;padding:0 4
 #tosend,#tobao,#toclr,#hsort,#hview{min-height:44px}
 #tabs>*{min-height:44px;display:inline-flex;align-items:center}
 [id^="hp"]:is(button){min-width:44px;min-height:44px}
+/* ---- 其餘輸入框／選單／統計頁按鈕 ≥44px 高 ---- */
+input:not([type=checkbox]):not([type=radio]),select{min-height:44px}
+select{font-size:16px}
+#panes button{min-height:44px}
