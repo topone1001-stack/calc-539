@@ -3,17 +3,17 @@ name: 保持網站喚醒
 on:
   schedule:
     - cron: '*/5 * * * *'     # 每 5 分鐘短 ping（GitHub 排程可能延遲）
-    - cron: '0 */6 * * *'     # 每 6 小時啟動一次長迴圈，補排程延遲
+    - cron: '0 */5 * * *'     # 每 5 小時啟動一次長迴圈，補排程延遲
   workflow_dispatch: {}
 jobs:
   ping:
-    if: github.event.schedule != '0 */6 * * *'
+    if: github.event.schedule != '0 */5 * * *'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - run: curl -fsS --retry 3 --retry-delay 20 --max-time 90 https://calc-539.onrender.com/healthz
   loop:
-    if: github.event.schedule == '0 */6 * * *' || github.event_name == 'workflow_dispatch'
+    if: github.event.schedule == '0 */5 * * *' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 355
     concurrency: { group: keepalive-loop, cancel-in-progress: true }
