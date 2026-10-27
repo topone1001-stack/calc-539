@@ -84,6 +84,8 @@ app.post('/api/mysets',auth,can('mynum'),jchk,(q,s)=>{const sets=(Array.isArray(
  const us=U.load();us[q.session.user]={...us[q.session.user],sets};U.save(us);oplog(q,'修改我的號碼',q.session.user,sets.map(x=>x.nums.length+'碼').join('/'));s.json({ok:true,sets});});
 // 彩迷熱門號碼分享：每人每期每遊戲一次，最多 10 碼
 const nextKey=g=>{const d=HI.data(g);const L=d.rows[d.rows.length-1];if(!L)return 'next';if(g==='hk'){const [y,n]=L[0].split('/');return y+'/'+String(+n+1).padStart(3,'0');}return String(+L[0]+1);};
+app.delete('/api/share/:g',auth,can('share'),jchk,(q,s)=>{const g=q.params.g;if(!GK.includes(g))return s.status(404).end();const sh=S.get('shares')||{},k=nextKey(g);if(sh[g]&&sh[g][k])delete sh[g][k][q.session.user];S.set('shares',sh);oplog(q,'撤回熱門分享',q.session.user,g+' '+k);s.json({ok:true});});
+app.get('/favicon.ico',(q,s)=>s.status(204).set('Cache-Control','public, max-age=604800').end());
 app.get('/api/share/:g',auth,can('share'),(q,s)=>{const g=q.params.g;if(!GK.includes(g))return s.status(404).end();const k=nextKey(g),all=(S.get('shares')||{})[g]||{},cur=all[k]||{};const cnt={};Object.values(cur).forEach(a=>a.forEach(n=>cnt[n]=(cnt[n]||0)+1));
  s.json({period:k,users:Object.keys(cur).length,cnt,mine:cur[q.session.user]||null});});
 app.post('/api/share/:g',auth,can('share'),jchk,(q,s)=>{const g=q.params.g;if(!GK.includes(g))return s.status(404).end();const mx=HI.data(g).max||49;const nums=[...new Set((q.body.nums||[]).map(Number).filter(n=>n>=1&&n<=mx))].slice(0,10);if(!nums.length)return s.status(400).json({error:'請選號碼'});
