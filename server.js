@@ -69,6 +69,9 @@ app.get('/',auth,(q,s)=>{const i=CALC.indexOf('<h2>'),e=CALC.lastIndexOf('</div>
  s.type('html').send(CALC.slice(0,i)+'<div class="tops">'+DRAWBOX+'</div>'+body+CALC.slice(e));});
 app.get('/calc.js',auth,(q,s)=>s.sendFile(P('calc.js')));
 app.get('/draws',auth,(q,s)=>s.set('Cache-Control','no-store').json(DR.get()));
+// 很小的「有沒有新開獎」查詢：網頁每 15–60 秒問一次，版本變了才重抓 /draws。live＝現在有彩種在等開獎結果
+app.get('/api/draws-ver',auth,(q,s)=>s.set('Cache-Control','no-store').json({v:DR.ver(),live:DR.live()}));
+DR.onNew(()=>HI.syncRecent().catch(e=>console.error('sync after new draw',e.message)));
 
 // ---- 統計／歷史 API ----
 const can=(...f)=>(q,s,n)=>f.some(x=>q.u.perms.includes(x))?n():s.status(403).json({error:'無權限'});

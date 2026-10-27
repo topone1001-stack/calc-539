@@ -109,3 +109,7 @@ async function rOther(p){const o=await api('/api/other');const row=(a,f)=>(a||[]
  if(!t.find(x=>x[0]===tab))tab=t[0][0];$('tabs').innerHTML=t.map(x=>`<button data-t="${x[0]}" class="${x[0]===tab?'on':''}">${x[1]}</button>`).join('');$('panes').innerHTML=t.map(x=>`<div class="pane ${x[0]===tab?'on':''}" id="pane-${x[0]}"></div>`).join('');
  $('tabs').onclick=e=>{const b=e.target.closest('[data-t]');if(!b)return;tab=b.dataset.t;localStorage.setItem('stats.tab',tab);document.querySelectorAll('#tabs button').forEach(x=>x.classList.toggle('on',x.dataset.t===tab));document.querySelectorAll('.pane').forEach(x=>x.classList.toggle('on',x.id==='pane-'+tab));render();};
  const q=new URLSearchParams(location.search);if(q.get('g'))$('g').value=q.get('g');await load();})();
+
+// 即時更新：有新開獎時，沒在選號就自動重載，正在選號就顯示提示
+(()=>{let V=null;const poll=()=>fetch('/api/draws-ver',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(x=>{if(!x)return setTimeout(poll,60e3);
+ if(V!==null&&x.v!==V){if(!SEL.size)load();else $('info').textContent='🎉 有新開獎，選號完成後重新選一次彩種即可更新';}V=x.v;setTimeout(poll,x.live?15e3:60e3);}).catch(()=>setTimeout(poll,60e3));setTimeout(poll,3e3);})();
