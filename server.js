@@ -14,7 +14,7 @@ app.use(require('compression')());app.use(express.urlencoded({extended:false,lim
 app.use(session({store,secret:S.get('secret'),resave:false,saveUninitialized:false,name:'calc.sid',rolling:true,cookie:{httpOnly:true,sameSite:'lax',secure:PROD?true:'auto',maxAge:4*3600e3}}));
 // 同源檢查：所有寫入要求的 Origin/Referer 必須是本站
 app.use((q,s,n)=>{if(q.method==='GET'||q.method==='HEAD'||q.path==='/cron')return n();const o=q.get('Origin')||q.get('Referer')||'';if(!o)return n();try{if(new URL(o).host===q.get('host'))return n();}catch(e){}susp(q,'跨站寫入被擋',o.slice(0,80));s.status(403).send('403');});
-const apiLimit=rateLimit({windowMs:60e3,limit:150,standardHeaders:true,legacyHeaders:false});app.use(['/api','/draws','/me','/admin','/stats'],apiLimit);
+const apiLimit=rateLimit({windowMs:60e3,limit:+process.env.API_LIMIT_OVERRIDE||150,standardHeaders:true,legacyHeaders:false});app.use(['/api','/draws','/me','/admin','/stats'],apiLimit);
 const FEATS=[['bao','包牌'],['col','立柱'],['car','車'],['prize','獎金'],['draw','開獎試算'],['hist','歷史開獎'],['stats','號碼統計'],['adv','進階分析'],['mynum','我的號碼'],['share','熱門分享'],['fun','沙盤浮字'],['other','3星/4星/Bingo']];
 const ALL=FEATS.map(f=>f[0]);
 const norm=(name,u)=>{const role=u.role||(name==='admin'?'admin':'user');return {hash:u.hash,parent:u.parent||'',created:u.created||'',createdBy:u.createdBy||'',role,enabled:u.enabled!==false,expires:u.expires||'',perms:role==='admin'?ALL.slice():(Array.isArray(u.perms)?u.perms:ALL.slice()),sets:u.sets||[]};};
@@ -23,8 +23,10 @@ const usable=u=>u&&u.enabled&&(!u.expires||u.expires>=today());
 const susp=(q,act,detail)=>{try{const L=S.get('oplog')||[];L.unshift({t:new Date().toISOString(),by:(q.session&&q.session.user)||'(未登入)',act:'⚠️ '+act,target:'',detail:String(detail||'').slice(0,120),ip:q.ip});S.set('oplog',L.slice(0,1000)).catch(()=>{});}catch(e){}};
 const VALID=n=>typeof n==='string'&&/^[A-Za-z0-9_.\-]{3,32}$/.test(n);
 const getU=n=>{if(!VALID(n))return null;const us=U.load();if(!Object.prototype.hasOwnProperty.call(us,n))return null;const r=us[n];return r&&r.hash?norm(n,r):null;};
-const auth=(q,s,n)=>{const us=U.load(),nm=q.session.user;if(!nm||!us[nm])return q.session.destroy(()=>s.redirect('/login'));const e=eff(us,nm);if(!e.ok)return q.session.destroy(()=>s.redirect('/login'));q.u=e;if(us[nm].mustChange&&!q.skipMC)return q.path.startsWith('/api/')?s.status(403).json({error:'請先修改密碼'}):s.redirect('/password');n();};
+const auth=(q,s,n)=>{const us=U.load(),nm=q.session.user;if(!nm||!us[nm])return q.session.destroy(()=>s.redirect('/login'));if(stale(us[nm]))return q.session.destroy(()=>q.path.startsWith('/api/')?s.status(401).json({error:'帳號已停用，請聯絡上線重設'}):s.redirect('/login?e=stale'));const e=eff(us,nm);if(!e.ok)return q.session.destroy(()=>s.redirect('/login'));q.u=e;if(us[nm].mustChange&&!q.skipMC)return q.path.startsWith('/api/')?s.status(403).json({error:'請先修改密碼'}):s.redirect('/password');n();};
 const DEFPW='12345678';
+// 預設密碼 24 小時內沒改就停用（舊帳號沒有 pwSetAt 不受影響）；重設會重新計時
+const STALE_MS=+process.env.STALE_MS_OVERRIDE||24*3600e3;const stale=r=>!!(r&&r.mustChange&&r.pwSetAt&&Date.now()-Date.parse(r.pwSetAt)>STALE_MS);
 const admin=(q,s,n)=>q.u.role==='admin'?n():s.status(403).send('403 無權限');
 const P=f=>path.join(__dirname,'public',f);
 const esc=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -37,16 +39,20 @@ const BF=new Map();const bfKey=k=>BF.get(k)||{f:0,until:0,lv:0};
 const bfLocked=k=>bfKey(k).until>Date.now();
 function bfFail(q,k){const x=bfKey(k);x.f++;if(x.f>=5){x.lv=Math.min(x.lv+1,6);x.until=Date.now()+Math.min(30,2**(x.lv-1))*60e3;x.f=0;susp(q,'登入鎖定',k+' 鎖 '+Math.min(30,2**(x.lv-1))+' 分');}BF.set(k,x);}
 setInterval(()=>{const t=Date.now();for(const [k,v] of BF)if(v.until<t&&v.f===0&&t-v.until>3600e3)BF.delete(k);},600e3).unref();
-app.post('/login',rateLimit({windowMs:15*60e3,limit:20,handler:(q,s)=>{susp(q,'登入頻率過高','');s.redirect('/login?e=rate');}}),(q,s)=>{
+const AF=new Map();setInterval(()=>{const t=Date.now();for(const [k,v] of AF)if(t-v.t>3600e3)AF.delete(k);},600e3).unref();
+app.post('/login',rateLimit({windowMs:15*60e3,limit:20,handler:(q,s)=>{susp(q,'登入頻率過高','');s.redirect('/login?e=rate');}}),async(q,s)=>{
  const name=typeof q.body.username==='string'?q.body.username.trim():'',u=getU(name);
- if(bfLocked('ip:'+q.ip)||(VALID(name)&&bfLocked('user:'+name)))return s.redirect('/login?e=rate');
+ if(bfLocked('ip:'+q.ip)||(VALID(name)&&bfLocked('ipuser:'+q.ip+'|'+name)))return s.redirect('/login?e=rate');
  if(typeof q.body.password!=='string'||q.body.password.length>200)return s.redirect('/login?e=1');
+ // 同帳號跨 IP 失敗：只延遲回應（最多 3 秒），不硬鎖帳號，避免被人故意猜錯把管理員／代理鎖住
+ const af=VALID(name)?(AF.get(name)||{f:0,t:0}):{f:0};if(af.f>=5)await new Promise(r=>setTimeout(r,Math.min(3000,(af.f-4)*500)));
  const ok=bcrypt.compareSync(q.body.password||'',u?u.hash:DUMMY);
  const LG=S.get('logins')||{};const rec=okk=>{if(!u)return;(LG[name]=LG[name]||[]).unshift({t:new Date().toISOString(),ip:q.ip,ok:okk});LG[name]=LG[name].slice(0,30);S.set('logins',LG).catch(()=>{});};
+ if(ok&&u&&stale(U.load()[name])){rec(false);return s.redirect('/login?e=stale');}
  if(ok&&u&&!eff(U.load(),name).ok){rec(false);return s.redirect('/login?e=off');}
  if(ok&&u){const us=U.load();us[name]={...us[name],lastLogin:new Date().toISOString(),lastIp:q.ip};U.save(us);rec(true);}else rec(false);
- if(ok&&u){BF.delete('user:'+name);return q.session.regenerate(()=>{q.session.user=name;q.session.ip=q.ip;s.redirect('/');});}
- bfFail(q,'ip:'+q.ip);if(VALID(name))bfFail(q,'user:'+name);s.redirect('/login?e=1');});
+ if(ok&&u){BF.delete('ipuser:'+q.ip+'|'+name);AF.delete(name);return q.session.regenerate(()=>{q.session.user=name;q.session.ip=q.ip;s.redirect('/');});}
+ bfFail(q,'ip:'+q.ip);if(VALID(name)){bfFail(q,'ipuser:'+q.ip+'|'+name);AF.set(name,{f:af.f+1,t:Date.now()});}s.redirect('/login?e=1');});
 app.post('/logout',(q,s)=>q.session.destroy(()=>{s.clearCookie('calc.sid');s.redirect('/login');}));
 
 // 自助改密碼（首次登入／重設後強制）
@@ -57,7 +63,7 @@ app.post('/password',rateLimit({windowMs:15*60e3,limit:20}),auth0,chk,(q,s)=>{co
  const send=m=>s.type('html').send(pwPage(q,m));
  if(o.length>200||!bcrypt.compareSync(o,us[n].hash)){susp(q,'改密碼舊密碼錯誤',n);return send('目前密碼錯誤');}
  if(a.length<8||a.length>200)return send('新密碼至少 8 字');if(a!==b)return send('兩次新密碼不一致');if(a===DEFPW)return send('不能使用預設密碼');if(a===o)return send('新密碼不能和舊密碼相同');
- us[n]={...us[n],hash:bcrypt.hashSync(a,12),mustChange:false};U.save(us);oplog(q,'修改自己密碼',n,'');q.session.regenerate(()=>{q.session.user=n;q.session.ip=q.ip;s.redirect('/');});});
+ us[n]={...us[n],hash:bcrypt.hashSync(a,12),mustChange:false,pwSetAt:new Date().toISOString()};U.save(us);oplog(q,'修改自己密碼',n,'');q.session.regenerate(()=>{q.session.user=n;q.session.ip=q.ip;s.redirect('/');});});
 app.get(['/tiger.mp4','/tiger.jpg'],(q,s)=>s.sendFile(P(q.path.slice(1)),{maxAge:'7d'}));
 app.get('/layout.js',(q,s)=>s.sendFile(P('layout.js')));
 app.get('/style.css',(q,s)=>s.sendFile(P('style.css')));
@@ -145,21 +151,21 @@ body{display:block}.wrap{display:block;max-width:980px;margin:0 auto;padding:12p
 form{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0}.row{display:flex;flex-wrap:wrap;gap:6px}.ck{display:flex;gap:4px;align-items:center;margin:0;white-space:nowrap}.ck input[type=checkbox]{width:auto;margin:0}input,select{margin:0;padding:7px;width:auto}button{padding:7px 12px;border-radius:7px;border:0;background:#2563eb;color:#fff;cursor:pointer}.del{background:#b91c1c}.msg{background:#1e3a8a;padding:8px;border-radius:8px}.note{color:#94a3b8;font-size:12px}a{color:#60a5fa}summary{cursor:pointer;color:#93c5fd;font-size:13px;margin:4px 0}
 .box{border:1px solid #334155;border-radius:10px;padding:10px;margin:10px 0}table{width:100%;border-collapse:collapse}td,th{border:1px solid #334155;padding:4px;font-size:12px}</style></head><body><div class="wrap">
 <p><a href="/">← 回計算器</a>｜<a href="/password">修改我的密碼</a></p><h1>${isA?'管理後台':'代理後台'}</h1><p class="note">登入身分：${esc(me)}（${ROLES[q.u.role]}）${isA?'':'｜只能建立與管理自己的會員；權限與到期日不可超過自己'}</p>${msg?`<p class="msg">${esc(msg)}</p>`:''}
-<div class="box"><h2>新增帳號</h2>${F('create',`<input name="username" id="newu" value="${genName(us,'user')}" placeholder="帳號" required pattern="[A-Za-z0-9_.\\-]{3,32}" autocomplete="off"><button type="button" id="regen" title="產生隨機帳號">隨機</button><span class="note">預設密碼 12345678，首次登入須修改</span>
+<div class="box"><h2>新增帳號</h2>${F('create',`<input name="username" id="newu" value="${genName(us,'user')}" placeholder="帳號" required pattern="[A-Za-z0-9_.\\-]{3,32}" autocomplete="off"><button type="button" id="regen">換一個</button><span class="note">預設密碼 12345678，首次登入須修改</span>
  ${isA?sel('role',[['user','會員'],['agent','代理'],['admin','管理員']],'user')+`<label class="ck">上線${sel('parent',[['','（無，直屬管理員）'],...agents.map(a=>[a,a])],'')}</label>`:'<input type="hidden" name="role" value="user"><span class="note">建立會員（上線＝自己）</span>'}
  <label class="ck">到期<input type="date" name="expires"${!isA&&myEff.effExpires?` max="${myEff.effExpires}" value="${myEff.effExpires}"`:''}></label>`+FEATS.filter(([k])=>capPerms.includes(k)).map(([k,l])=>`<label class="ck"><input type="checkbox" name="perms" value="${k}" checked>${l}</label>`).join('')+'<button>新增</button>')}${created?`<div id="newacct" style="border:1px solid #d4af37;background:#2a1f0c;border-radius:10px;padding:10px;margin-top:10px"><b>✅ 帳號已建立</b><div id="cptxt" style="font-size:18px;margin:6px 0;user-select:all">帳號：${esc(created)} 密碼：12345678</div><button type="button" id="cpbtn">📋 複製</button> <span id="cpmsg" class="note"></span><p class="note">首次登入會要求修改密碼。</p></div>`:''}</div>
 <div class="box"><form method="get" action="/admin"><input name="q" placeholder="搜尋帳號／IP／上線" value="${esc(f.q||'')}">${sel('agent',[['','全部代理線'],...agents.map(a=>[a,'代理：'+a])],f.agent||'')}${sel('role',[['','全部角色'],['admin','管理員'],['agent','代理'],['user','會員']],f.role||'')}${sel('st',[['','全部狀態'],['ok','正常'],['bad','停用／過期']],f.st||'')}<button>篩選</button> <a href="/admin">清除</a></form>
 <h2>帳號樹（${list.length} / ${vis.size}）</h2>${rows||'<p class="note">沒有符合的帳號</p>'}</div>
 <div class="box"><details ${ops.length?'':'open'}><summary><b>操作紀錄（最近 ${ops.length} 筆）</b></summary><div style="overflow:auto"><table><tr><th>時間</th><th>操作者</th><th>動作</th><th>對象</th><th>內容</th><th>IP</th></tr>${ops.map(o=>`<tr><td>${tpe(o.t)}</td><td>${esc(o.by)}</td><td>${esc(o.act)}</td><td>${esc(o.target)}</td><td>${esc(o.detail)}</td><td>${esc(o.ip||'')}</td></tr>`).join('')}</table></div></details></div>
 </div><script>(function(){
-const u=document.getElementById('newu'),rg=document.getElementById('regen'),rs=document.querySelector('form[action="/admin/create"] select[name=role]');let edited=false;
-if(u){u.addEventListener('input',()=>edited=true);const gen=async()=>{try{const r=await fetch('/admin/genname?role='+(rs?rs.value:'user'));const j=await r.json();u.value=j.name;edited=false;}catch(e){}};rg.onclick=gen;if(rs)rs.addEventListener('change',()=>{if(!edited)gen();});}
+const u=document.getElementById('newu'),rs=document.querySelector('form[action="/admin/create"] select[name=role]');
+const gn=async()=>{try{const j=await (await fetch('/admin/genname?role='+(rs?rs.value:'user'))).json();u.value=j.name;}catch(e){}};if(u&&rs)rs.addEventListener('change',gn);const rg=document.getElementById('regen');if(u&&rg)rg.addEventListener('click',gn);
 const t=document.getElementById('cptxt'),b=document.getElementById('cpbtn'),m=document.getElementById('cpmsg');if(!t)return;
-const legacy=s=>{try{const a=document.createElement('textarea');a.value=s;a.setAttribute('readonly','');a.style.position='fixed';a.style.opacity='0';document.body.append(a);a.select();a.setSelectionRange(0,s.length);const ok=document.execCommand('copy');a.remove();return ok;}catch(e){return false;}};
-const copy=async s=>{try{if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(s);return true;}}catch(e){}return legacy(s);};
-const say=(ok,auto)=>{m.textContent=ok?(auto?'已自動複製':'已複製'):'請按複製';m.style.color=ok?'#86efac':'#fcd34d';};
-copy(t.textContent).then(ok=>say(ok,true));b.onclick=async()=>say(await copy(t.textContent),false);})();</script></body></html>`;};
-const genName=(us,role)=>{const pre=role==='agent'?'a':role==='admin'?'s':'m';for(let i=0;i<200;i++){const n=pre+String(crypto.randomInt(0,1e6)).padStart(6,'0');if(!Object.prototype.hasOwnProperty.call(us,n))return n;}return pre+Date.now().toString().slice(-8);};
+const legacy=s=>{const a=document.createElement('textarea');a.value=s;a.setAttribute('readonly','');a.style.cssText='position:fixed;top:0;left:0;opacity:0;font-size:16px';document.body.append(a);a.focus();a.select();a.setSelectionRange(0,s.length);let ok=false;try{ok=document.execCommand('copy');}catch(e){}a.remove();return ok;};
+const say=ok=>{m.textContent=ok?'已複製，可直接貼給客戶':'複製失敗，請長按上方文字複製';m.style.color=ok?'#86efac':'#fcd34d';};
+b.onclick=()=>{const s=t.textContent;// 直接在點擊事件內複製（iPhone Safari 需要）
+ if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(s).then(()=>say(true),()=>say(legacy(s)));}else say(legacy(s));};})();</script></body></html>`;};
+const NAMECH='23456789abcdefghjkmnpqrstuvwxyz';const AUTO_RE=/^[mas][23456789abcdefghjkmnpqrstuvwxyz]{6}$/;const genName=(us,role)=>{const pre=role==='agent'?'a':role==='admin'?'s':'m';for(let i=0;i<500;i++){let n=pre;for(let j=0;j<6;j++)n+=NAMECH[crypto.randomInt(NAMECH.length)];if(!Object.prototype.hasOwnProperty.call(us,n))return n;}return pre+Date.now().toString(36).slice(-8);};// 隨機帳號：前綴 m/a/s＋6 碼（去掉 0/1/i/l/o 易混字元），檢查不重複
 app.get('/admin/genname',auth,mgr,(q,s)=>{const r=q.u.role==='admin'&&['user','agent','admin'].includes(q.query.role)?q.query.role:'user';s.set('Cache-Control','no-store').json({name:genName(U.load(),r)});});
 const go=(q,s,m)=>{q.session.flash=m;s.redirect('/admin'+(q.get('Referer')||'').replace(/^.*\/admin/,'').replace(/[^?=&\w%.\-]/g,'').slice(0,200));};
 app.get('/admin',auth,mgr,(q,s)=>{const m=q.session.flash,c=q.session.created;delete q.session.flash;delete q.session.created;s.set('Cache-Control','no-store').type('html').send(page(q,m,c));});
@@ -168,19 +174,19 @@ const date=x=>/^\d{4}-\d{2}-\d{2}$/.test(x||'')?x:'';
 // 每個操作：伺服器端檢查對象是否在自己的下線內
 const A=(name,fn)=>app.post('/admin/'+name,auth,mgr,chk,(q,s)=>{const us=U.load(),n=String(q.body.username||'');
  if(name!=='create'){if(!us[n])return go(q,s,'找不到帳號');if(n===q.session.user)return go(q,s,'不能對自己操作');if(!new Set(visible(q)).has(n)){susp(q,'越權操作',name+' → '+n);return go(q,s,'無權管理此帳號');}}
- const r=fn(q,us,n);if(typeof r==='string'&&!r.startsWith('✓'))return go(q,s,r);U.save(us);oplog(q,{create:'新增',reset:'重設密碼',toggle:'停用/啟用',delete:'刪除',perms:'修改設定'}[name],n,r.replace(/^✓\s*/,''));go(q,s,r);});
+ const r=fn(q,us,n);if(typeof r==='string'&&!r.startsWith('✓'))return go(q,s,r);U.save(us);oplog(q,{create:'新增',reset:'重設密碼',toggle:'停用/啟用',delete:'刪除',perms:'修改設定'}[name],name==='create'&&q.session.created||n,r.replace(/^✓\s*/,''));go(q,s,r);});
 const lastAdmin=(us,n)=>norm(n,us[n]).role==='admin'&&Object.keys(us).filter(k=>{const u=norm(k,us[k]);return u.role==='admin'&&u.enabled;}).length<=1;
 // 權限／到期上限＝上線（若為代理）與操作者的有效值
 function limits(q,us,parent){const isA=q.u.role==='admin';let perms=isA?ALL.slice():eff(us,q.session.user).perms,exp=isA?'':eff(us,q.session.user).effExpires;
  if(parent&&us[parent]){const pe=eff(us,parent);if(norm(parent,us[parent]).role!=='admin'){perms=perms.filter(k=>pe.perms.includes(k));if(pe.effExpires&&(!exp||pe.effExpires<exp))exp=pe.effExpires;}}return {perms,exp};}
 const clampExp=(e,cap)=>cap&&(!e||e>cap)?cap:e;
-A('create',(q,us,n)=>{if(!/^[A-Za-z0-9_.\-]{3,32}$/.test(n))return '帳號格式錯誤（3–32 個英數字）';if(us[n])return '帳號已存在';
+A('create',(q,us,n)=>{if(AUTO_RE.test(n)&&us[n]){const r=['user','agent','admin'].includes(q.body.role)?q.body.role:'user';n=genName(us,q.u.role==='admin'?r:'user');}if(!/^[A-Za-z0-9_.\-]{3,32}$/.test(n))return '帳號格式錯誤（3–32 個英數字）';if(us[n])return '帳號已存在';
  const isA=q.u.role==='admin';let role=['user','agent','admin'].includes(q.body.role)?q.body.role:'user';if(role!=='user'&&!isA)return '代理只能建立會員';
  let parent=String(q.body.parent||'');if(!isA)parent=q.session.user;
  else if(parent&&!(us[parent]&&norm(parent,us[parent]).role==='agent'))parent='';if(role==='admin')parent='';
- const L=limits(q,us,parent);us[n]={hash:bcrypt.hashSync(DEFPW,12),mustChange:true,role,parent,enabled:true,expires:clampExp(date(q.body.expires),L.exp),perms:arr(q.body.perms).filter(k=>L.perms.includes(k)),created:new Date().toISOString(),createdBy:q.session.user};
+ const L=limits(q,us,parent);us[n]={hash:bcrypt.hashSync(DEFPW,12),mustChange:true,pwSetAt:new Date().toISOString(),role,parent,enabled:true,expires:clampExp(date(q.body.expires),L.exp),perms:arr(q.body.perms).filter(k=>L.perms.includes(k)),created:new Date().toISOString(),createdBy:q.session.user};
  q.session.created=n;return `✓ 已新增 ${ROLES[role]} ${n}${parent?'（上線 '+parent+'）':''}`;});
-A('reset',(q,us,n)=>{us[n]={...us[n],...norm(n,us[n]),hash:bcrypt.hashSync(DEFPW,12),mustChange:true};return '✓ 已重設 '+n+' 的密碼為 12345678（下次登入須修改）';});
+A('reset',(q,us,n)=>{us[n]={...us[n],...norm(n,us[n]),hash:bcrypt.hashSync(DEFPW,12),mustChange:true,pwSetAt:new Date().toISOString()};return '✓ 已重設 '+n+' 的密碼為 12345678（下次登入須修改）';});
 A('toggle',(q,us,n)=>{if(norm(n,us[n]).enabled&&lastAdmin(us,n))return '至少要保留一位管理員';us[n]={...us[n],enabled:!norm(n,us[n]).enabled};const dn=downs(us,n).length;return '✓ 已'+(us[n].enabled?'啟用 ':'停用 ')+n+(dn&&!us[n].enabled?`（其 ${dn} 個下線同時無法登入）`:'');});
 A('delete',(q,us,n)=>{const dn=downs(us,n).length;if(dn)return `${n} 還有 ${dn} 個下線，請先刪除或停用下線`;if(lastAdmin(us,n))return '至少要保留一位管理員';delete us[n];return '✓ 已刪除 '+n;});
 A('perms',(q,us,n)=>{const isA=q.u.role==='admin';const u=norm(n,us[n]);let role=['user','agent','admin'].includes(q.body.role)?q.body.role:u.role;if(!isA&&role!==u.role)return '只有管理員可以變更角色';
