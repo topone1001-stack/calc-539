@@ -85,7 +85,7 @@ const jchk=(q,s,n)=>{const t=q.get('X-CSRF')||'',r=q.session.csrf||'';if(r&&t.le
 const GK=['539','lotto','super','ca','hk','vn655','vn645','vn535'];
 app.get('/stats',auth,(q,s)=>s.sendFile(P('stats.html')));
 app.get('/stats.js',auth,(q,s)=>s.sendFile(P('stats.js')));
-app.get('/api/hist/:g',auth,can('hist','stats','adv','share','fun'),(q,s)=>{const g=q.params.g;if(!GK.includes(g))return s.status(404).end();const d={...HI.data(g),importing:HI.importing()};const tag='"'+g+d.total+(d.last||'')+d.importing+'"';if(q.get('If-None-Match')===tag)return s.status(304).end();s.set({ETag:tag,'Cache-Control':'private, no-cache'}).json(d);});
+app.get('/api/hist/:g',auth,can('hist','stats','adv','share','fun'),(q,s)=>{const g=q.params.g;if(!GK.includes(g))return s.status(404).end();const d={...HI.data(g),importing:HI.importing()};const tag='"'+g+'-'+d.total+'-'+(d.last||'')+'-'+(d.ordN||0)+'-'+d.importing+'"';if(q.get('If-None-Match')===tag)return s.status(304).end();s.set({ETag:tag,'Cache-Control':'private, no-cache'}).json(d);});
 app.get('/api/hist-status',auth,admin,(q,s)=>s.json({...HI.status(),counts:Object.fromEntries(GK.map(g=>[g,HI.data(g).total]))}));
 app.get('/api/csrf',auth,(q,s)=>s.json({csrf:csrf(q)}));
 app.get('/api/mysets',auth,can('mynum'),(q,s)=>s.json({sets:q.u.sets}));

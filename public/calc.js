@@ -45,16 +45,16 @@ function caBox(c,m){let b=document.getElementById('cabox');const d=document.getE
  
  `<details><summary>獎金表（第 ${L.period} 期）</summary><table class="prz"><tr><th>中獎</th><th>注數</th><th>每注</th></tr>${c.prizes.map(p=>`<tr><td>${p.desc.replace(/Matched (\d) of 5 numbers/,'中 $1 個')}</td><td>${Number(p.count).toLocaleString()}</td><td>${usd(p.amount)}</td></tr>`).join('')}</table></details>`+
  `<details><summary>近 20 期開獎</summary><table class="hist">${c.hist.map(x=>`<tr><td>${x.period}</td><td>${x.date}</td><td>${x.nums.map(pad).join(' ')}</td></tr>`).join('')}</table></details>`+
- `<p class="note">📺 開獎時間台北約 09:30（11/1 起約 10:30）｜號碼以加州彩券公布為準｜<a target="_blank" rel="noopener" href="https://www.lotterywang.com/lottoCA5" style="color:#60a5fa">加州開獎結果</a>｜資料來源：California Lottery｜更新：${new Date(c.updated).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'})}</p>`;}
+ `<p class="note">📺 開獎時間台北約 09:30（11/1 起約 10:30）｜號碼以加州彩券公布為準｜<a target="_blank" rel="noopener" href="https://www.lotterywang.com/lottoCA5" style="color:#60a5fa">加州開獎結果</a>｜資料來源：${(c.latest&&c.latest.src||c.src)==='official'?'California Lottery 官方':(c.latest&&c.latest.src||c.src)==='lotteryusa'?'lotteryusa.com（備援，請以官方為準）':'—'}｜更新：${new Date(c.updated).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'})}</p>`;}
 {const g=document.getElementById('game');if(g)g.onchange=()=>{if(DD)drawBox(DD);markMine();};}
 
 function gameTheme(){const g=document.getElementById('game');document.documentElement.dataset.game=g?g.value:'539';}
 {const g=document.getElementById('game');if(g){g.addEventListener('change',gameTheme);}gameTheme();}
 // ---- 多遊戲面板（覆寫前面的 drawBox/caBox/mine/markMine）----
-const GAMES={'539':{name:'今彩539',cls:'g539',max:39,src:'台灣彩券'},lotto:{name:'大樂透',cls:'glo',max:49,sp:'特別號',src:'台灣彩券'},super:{name:'威力彩',cls:'gsu',max:38,sp:'第二區',src:'台灣彩券'},ca:{name:'加州天天樂',cls:'gca',max:39,src:'California Lottery'},hk:{name:'香港六合彩',cls:'ghk',max:49,sp:'特別號',src:'香港賽馬會'},vn655:{name:'越南 Power 6/55',cls:'gvn',max:55,sp:'特別號',src:'Vietlott'},vn645:{name:'越南 Mega 6/45',cls:'gvn',max:45,src:'Vietlott'},vn535:{name:'越南 Lotto 5/35',cls:'gvn',max:35,sp:'特別號',src:'Vietlott'}};
+const GAMES={'539':{name:'今彩539',cls:'g539',max:39,src:'台灣彩券'},lotto:{name:'大樂透',cls:'glo',max:49,sp:'特別號',src:'台灣彩券'},super:{name:'威力彩',cls:'gsu',max:38,sp:'第二區',src:'台灣彩券'},ca:{name:'加州天天樂',cls:'gca',max:39,src:'California Lottery'},hk:{ordSrc:'biga（非官方）',name:'香港六合彩',cls:'ghk',max:49,sp:'特別號',src:'香港賽馬會'},vn655:{name:'越南 Power 6/55',cls:'gvn',max:55,sp:'特別號',src:'Vietlott'},vn645:{name:'越南 Mega 6/45',cls:'gvn',max:45,src:'Vietlott'},vn535:{name:'越南 Lotto 5/35',cls:'gvn',max:35,sp:'特別號',src:'Vietlott'}};
 const ESC=x=>String(x==null?'':x).replace(/[&<>"'`]/g,c=>'&#'+c.charCodeAt(0)+';');
 // 落球順序：只有官方有提供的彩種（台灣彩券）才顯示，沒有就標明
-const ordLine=L=>Array.isArray(L.order)&&L.order.length?`<div class="ordrow"><span class="ordlb">落球順序</span>${L.order.map((n,i)=>`<span class="ball mini">${pad(n)}</span>`).join('')}${L.special!=null?`<span class="ball sp mini">${pad(L.special)}</span>`:''}</div>`:'<div class="note">來源未提供落球順序</div>';
+const ordLine=(L,os)=>Array.isArray(L.order)&&L.order.length?`<div class="ordrow"><span class="ordlb">落球順序</span>${L.order.map((n,i)=>`<span class="ball mini">${pad(n)}</span>`).join('')}${L.special!=null?`<span class="ball sp mini">${pad(L.special)}</span>`:''}</div>${os?`<div class="note">落球順序來源：${ESC(os)}</div>`:''}`:'<div class="note">來源未提供落球順序</div>';
 const curGame=()=>{const g=document.getElementById('game');return g?g.value:'539';};
 function gameData(k,d){d=d||DD||{};if(k==='539')return {latest:d.d539&&d.d539[0],hist:d.d539||[],updated:d.updated};if(k==='lotto')return {latest:d.lotto&&d.lotto[0],hist:d.lotto||[],updated:d.updated};if(k==='super')return {latest:d.super&&d.super[0],hist:d.super||[],updated:d.updated};const c=d[k];return c?{...c}:{hist:[]};}
 function mine(){const el=document.getElementById('mine');if(!el)return[];const mx=GAMES[curGame()].max;return [...new Set((el.value.match(/\d+/g)||[]).map(Number).filter(n=>n>=1&&n<=mx))];}
@@ -63,7 +63,7 @@ function panel(k,d,extra,note){const G=GAMES[k],x=gameData(k,d),L=x.latest;const
  if(!b){b=document.createElement('div');b.id=id;b.className='drawbox '+G.cls;const t=document.querySelector('.tops');(t||document.getElementById('draws').parentNode).append(b);}
  if(!L){b.innerHTML=`<div class="dh"><span class="gb">${G.name}</span></div><p class="note">暫時取不到開獎資料</p>`;return;}
  const m=curGame()===k?mine():[],hit=L.nums.filter(n=>m.includes(n));
- b.innerHTML=`<div class="dh"><span class="gb">${G.name}</span><span class="per">第 ${ESC(L.period)} 期</span></div><div class="dd">最新開獎・${ESC(L.date)}</div><div class="brow">${balls(L.nums,hit,L.special)}${L.special!=null?`<span class="splabel">${G.sp}</span>`:''}</div>${ordLine(L)}${extra||''}`+
+ b.innerHTML=`<div class="dh"><span class="gb">${G.name}</span><span class="per">第 ${ESC(L.period)} 期</span></div><div class="dd">最新開獎・${ESC(L.date)}</div><div class="brow">${balls(L.nums,hit,L.special)}${L.special!=null?`<span class="splabel">${G.sp}</span>`:''}</div>${ordLine(L,G.ordSrc)}${extra||''}`+
  `<details><summary>近 ${x.hist.length} 期開獎</summary><table class="hist">${x.hist.map(h=>`<tr><td>${ESC(h.period)}</td><td>${ESC(h.date)}</td><td>${h.nums.map(pad).join(' ')}${h.special!=null?' ＋'+pad(h.special):''}</td></tr>`).join('')}</table></details>`+
  metaBox(note,'資料來源：'+srcLabel(k,G,L,x),x.updated?'更新：'+new Date(x.updated).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'}):'');}
 // 資料來源：以「最新一期」實際抓到的來源為準（每期存 src），沒有就用整包的 src；台彩、六合彩只抓官方

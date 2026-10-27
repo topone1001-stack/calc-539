@@ -12,27 +12,27 @@ const post=(u,b)=>api(u,{method:'POST',headers:{'Content-Type':'application/json
 function chart(id,cfg){if(charts[id])charts[id].destroy();const c=$(id);if(!c||!window.Chart)return;charts[id]=new Chart(c,cfg);}
 window.Chart&&(Chart.defaults.color='#cbd5e1',Chart.defaults.borderColor='#334155');
 // ---- 選號托盤 ----
-function tray(){$('trayn').innerHTML=SEL.size?[...SEL].sort((a,b)=>a-b).map(n=>ball(n)).join(''):'（點任何號碼加入）';document.querySelectorAll('[data-n]').forEach(e=>e.classList.toggle('sel',SEL.has(+e.dataset.n)&&!e.classList.contains('sp')));}
+function tray(){['tosend','tobao','toclr'].forEach(i=>{const b=$(i);b.classList.toggle('off',!SEL.size);b.setAttribute('aria-disabled',SEL.size?'false':'true');b.style.opacity=SEL.size?'':'.4';b.style.filter=SEL.size?'':'grayscale(1)';});$('trayn').innerHTML=SEL.size?[...SEL].sort((a,b)=>a-b).map(n=>ball(n)).join(''):'（點任何號碼加入）';document.querySelectorAll('[data-n]').forEach(e=>e.classList.toggle('sel',SEL.has(+e.dataset.n)&&!e.classList.contains('sp')));}
 document.addEventListener('click',e=>{const t=e.target.closest('[data-n]');if(!t||t.closest('#tray')&&!t.dataset.n)return;if(t.classList.contains('sp'))return;const n=+t.dataset.n;SEL.has(n)?SEL.delete(n):SEL.add(n);tray();});
 const send=to=>{localStorage.setItem('calc.picks',JSON.stringify({game:$('g').value,nums:[...SEL].sort((a,b)=>a-b),to}));location.href='/#'+to;};
-$('tosend').onclick=()=>SEL.size&&send('draw');$('tobao').onclick=()=>SEL.size&&send('bao');$('toclr').onclick=()=>{SEL.clear();tray();};
+const need=()=>{if(SEL.size)return true;alert('請先點選號碼');return false;};$('tosend').onclick=()=>need()&&send('draw');$('tobao').onclick=()=>need()&&send('bao');$('toclr').onclick=()=>{if(!need())return;SEL.clear();tray();};
 // ---- 範圍 ----
 function applyRange(){const v=$('rng').value;$('dr').style.display=v==='d'?'':'none';let rows=D.rows;
  if(v==='d'){const a=$('d1').value,b=$('d2').value;rows=rows.filter(r=>(!a||r[1]>=a)&&(!b||r[1]<=b));}else if(+v)rows=rows.slice(-v);R=rows;
  $('info').textContent=`${GM[D.g].name}：資料庫共 ${fmt(D.total)} 期（${D.first||'—'} ～ ${D.last||'—'}），目前分析 ${fmt(R.length)} 期`+(D.importing?'（其他遊戲仍在匯入中）':'');render();}
 ['rng','d1','d2'].forEach(i=>$(i).onchange=applyRange);
 async function load(){const g=$('g').value;document.documentElement.style.setProperty('--gc',GM[g].c);document.documentElement.style.setProperty('--gb',GM[g].b);$('info').textContent='載入中…';
- D=await api('/api/hist/'+g);SEL.clear();tray();if(!D.total){$('info').textContent='⏳ 正在從官方匯入完整歷史資料（首次約 5 分鐘），完成後本頁會自動更新…';$('panes').querySelectorAll('.pane').forEach(p=>p.innerHTML='');setTimeout(()=>{if($('g').value===g)load();},20000);return;}
+ const d=await api('/api/hist/'+g,{cache:'no-cache'});if($('g').value!==g)return;D=d;SEL.clear();tray();if(!D.total){$('info').textContent='⏳ 正在從官方匯入完整歷史資料（首次約 5 分鐘），完成後本頁會自動更新…';$('panes').querySelectorAll('.pane').forEach(p=>p.innerHTML='');setTimeout(()=>{if($('g').value===g)load();},20000);return;}
  if(D.importing)$('info').dataset.imp=1;applyRange();}
 $('g').onchange=load;
 let tab=localStorage.getItem('stats.tab')||'';
 function render(){const p=$('pane-'+tab);if(!p)return;if(isVN()&&tab==='sand'){p.innerHTML='<div class="card2"><p class="note">越南彩不提供隨機選號功能。</p></div>';return;}({hist:rHist,num:rNum,trend:rTrend,adv:rAdv,ord:rOrd,share:rShare,sand:rSand,mine:rMine,other:rOther})[tab](p);tray();}
 // ---- 落球順序（只用官方提供的落球順序；依目前範圍統計各球位）----
 let oq='';
-function rOrd(p){const rows=R.filter(r=>Array.isArray(r[4])&&r[4].length);if(!rows.length){p.innerHTML=`<div class="card2"><h3>🎯 落球順序</h3><p class="note">${H(GM[D.g].name)}：官方未提供落球順序，無法統計。</p></div>`;return;}
+function rOrd(p){const rows=R.filter(r=>Array.isArray(r[4])&&r[4].length);if(!rows.length){p.innerHTML=`<div class="card2"><h3>🎯 落球順序</h3><p class="note">${H(GM[D.g].name)}：來源未提供落球順序，無法統計。</p></div>`;return;}
  const n=D.n,pos=Array.from({length:n},()=>Array(D.max+1).fill(0));rows.forEach(r=>r[4].forEach((x,i)=>{if(i<n&&x>=1&&x<=D.max)pos[i][x]++;}));
  const fb=Array(D.max+1).fill(0),lb2=Array(D.max+1).fill(0);rows.forEach(r=>{fb[r[4][0]]++;lb2[r[4][r[4].length-1]]++;});
- p.innerHTML=`<div class="card2"><h3>各球位最常開出的號碼（範圍內 ${fmt(rows.length)} 期有落球順序）</h3><p class="note">⚠️ 歷史統計，非預測；每期開獎都是獨立隨機</p>
+ p.innerHTML=`<div class="card2"><h3>各球位最常開出的號碼（範圍內 ${fmt(rows.length)} 期有落球順序）</h3><p class="note">⚠️ 歷史統計，非預測；每期開獎都是獨立隨機${D.g==='hk'?'｜落球順序來源：biga（非官方），已核對與香港賽馬會官方號碼一致':''}</p>
  <table><tr><th>球位</th><th>前 5 名（次數）</th></tr>${pos.map((c,i)=>`<tr><td>第 ${i+1} 球</td><td style="text-align:left">${nums(D.max).sort((a,b)=>c[b]-c[a]).slice(0,5).map(x=>`<span class="chip" data-n="${x}">${pad(x)} <b>${c[x]}</b></span>`).join('')}</td></tr>`).join('')}</table></div>
  <div class="card2"><h3>歷史落球順序查詢</h3><div class="bar"><input id="oq" placeholder="期別或日期（例 2026-10、115000259）" value="${H(oq)}" style="flex:1;min-width:200px"></div><p class="note">${oq?'符合 '+fmt(rows.filter(r=>String(r[0]).includes(oq)||r[1].includes(oq)).length)+' 期，顯示最近 50 期':'顯示最近 30 期'}</p><table><tr><th>期別</th><th>日期</th><th>大小順序／落球順序</th></tr>${(oq?rows.filter(r=>String(r[0]).includes(oq)||r[1].includes(oq)).slice(-50):rows.slice(-30)).reverse().map(r=>`<tr><td>${H(r[0])}</td><td>${H(r[1])}</td><td style="text-align:left">大小：${r[2].map(x=>ball(x)).join('')}<br>落球：${r[4].map(x=>ball(x)).join('')}</td></tr>`).join('')}</table></div>`;$('oq').onchange=e=>{oq=e.target.value.trim();rOrd(p);tray();};}
 // ---- 1. 歷史／查詢 ----

@@ -45,18 +45,27 @@ async function caPage(p){if(p>1)return [];
  if(!usa.length)throw new Error('ca: no valid rows from any source');usa.src='lotteryusa';return usa;}
 exports.caPage=caPage;
 const months=(from)=>{const out=[];let [y,m]=from.split('-').map(Number);const now=new Date(Date.now()+8*3600e3),ey=now.getUTCFullYear(),em=now.getUTCMonth()+1;while(y<ey||(y===ey&&m<=em)){out.push(`${y}-${String(m).padStart(2,'0')}`);m++;if(m>12){m=1;y++;}}return out;};
+// 六合彩歷史落球順序：HKJC 只給排序號碼，改用 biga 歷史表（非官方）；號碼和特別號要跟資料庫裡 HKJC 官方的一致才寫入
+async function hkOrdBackfill(){if(!pool())return 0;const DR=require('./draws');const HKORD='https://mark6online.biga.com.tw/6/MARK6/%E5%AF%A6%E7%94%A8%E7%B5%B1%E8%A8%88%EF%BC%8D%E6%AD%B7%E5%8F%B2%E9%96%8B%E7%8D%8E%E8%99%9F%E7%A2%BC.php';
+ const full=!S.get('hkOrdDone'),M=new Map();if(!full&&(mem.hk||[]).slice(-3).every(x=>x[4]))return 0;for(let p=1;p<=(full?60:2);p++){try{const r=await fetch(HKORD+'?page='+p,{headers:{'User-Agent':UA},signal:AbortSignal.timeout(20000)});if(!r.ok)break;const m=DR._parseHKOrder(await r.text());if(!m.size)break;
+  for(const [k,v] of m){const yy=+k.slice(2,4);M.set((yy>50?'19':'20')+k.slice(2),v);}}catch(e){console.error('hk ord page',p,e.message);break;}await sleep(400);}
+ let n=0;for(const x of (mem.hk||[])){if(x[4])continue;const o=M.get(x[0]);if(!o||o.special!==x[3]||o.order.length!==6||o.order.slice().sort((a,b)=>a-b).join()!==x[2].join())continue;
+  n+=(await pool().query("UPDATE draws SET ord=$1 WHERE game='hk' AND period=$2 AND ord IS NULL",[o.order,x[0]])).rowCount;}
+ if(full&&M.size)await S.set('hkOrdDone',1);if(n){await load();console.log('hk ord +',n);}return n;}
+exports.hkOrdBackfill=hkOrdBackfill;
 let importing=false,status={};exports.status=()=>({importing,status});exports.importing=()=>importing;
 async function fullImport(){if(!pool()||importing)return;importing=true;const ordDone=S.get('ordDone');const done=ordDone?(S.get('histDone')||{}):{};const cur=months('2000-01').slice(-2);
  try{for(const g of ['539','lotto','super']){let added=0;for(const m of months(GAMES[g].from)){const k=g+':'+m;if(done[k]&&!cur.includes(m))continue;try{added+=await put(g,await twMonth(g,m));if(!cur.includes(m))done[k]=1;}catch(e){console.error('import',k,e.message);}if(m.endsWith('-12'))await S.set('histDone',done);await sleep(150);}status[g]={added,at:new Date().toISOString()};await S.set('histDone',done);await load();}if(!ordDone)await S.set('ordDone',1);
   // 六合彩：每 3 個月一段
   {let added=0;const now=new Date();for(let y=1993;y<=now.getUTCFullYear();y++)for(const [a,b] of [['0101','0331'],['0401','0630'],['0701','0930'],['1001','1231']]){const k=`hk:${y}${a}`;const isCur=y===now.getUTCFullYear();if(done[k]&&!isCur)continue;if(new Date(`${y}-${a.slice(0,2)}-${a.slice(2)}`)>now)continue;
     try{added+=await put('hk',await hkRange({startDate:y+a,endDate:y+b}));if(!isCur)done[k]=1;}catch(e){console.error('import',k,e.message);}await sleep(300);}status.hk={added};await S.set('histDone',done);await load();}
+  try{status.hkOrd=await hkOrdBackfill();}catch(e){console.error('hk ord',e.message);}
   // 加州：官方 API 只提供近約 180 期，之後逐日累積
   {let added=0;for(let p=1;p<=12;p++){try{const r=await caPage(p);if(!r.length)break;added+=await put('ca',r);}catch(e){console.error('ca page',p,e.message);break;}await sleep(500);}status.ca={added};}
  }finally{importing=false;await load();console.log('hist import done',JSON.stringify(status));}}
 async function syncRecent(){if(!pool())return;let n=0;const m=months('2000-01').slice(-1)[0];
  for(const g of ['539','lotto','super'])try{n+=await put(g,await twMonth(g,m));}catch(e){}
- try{n+=await put('hk',await hkRange({lastNDraw:5}));}catch(e){}try{n+=await put('ca',await caPage(1));}catch(e){}
+ try{n+=await put('hk',await hkRange({lastNDraw:5}));}catch(e){}try{n+=await put('ca',await caPage(1));}catch(e){}try{n+=await hkOrdBackfill();}catch(e){}
  if(n){await load();console.log('hist +',n);}return n;}
 exports.syncRecent=syncRecent;
 exports.start=async()=>{await init();setTimeout(fullImport,3000);setInterval(()=>{const d=new Date(Date.now()+8*3600e3),hm=d.getUTCHours()*60+d.getUTCMinutes();
@@ -68,7 +77,7 @@ function build(g){const rows=mem[g]||[];const G=GAMES[g];const max=G.max;
  rows.forEach((r,i)=>{for(const n of r[2]){if(n>max)continue;cnt[n]++;const gap=last[n]<0?i:i-last[n]-1;if(gap>maxGap[n])maxGap[n]=gap;if(last[n]===i-1&&i>0)rep[n]++;last[n]=i;}});
  const N=rows.length,cur=last.map((l,n)=>n===0?0:(l<0?N:N-1-l));for(let n=1;n<=max;n++)if(cur[n]>maxGap[n])maxGap[n]=cur[n];
  return built[g]={g,max,n:G.n,sp:!!G.sp,total:N,first:rows[0]&&rows[0][1],last:rows[N-1]&&rows[N-1][1],cnt,cur,maxGap,rep,
-  rows:rows.map(r=>[r[0],r[1],r[2],r[3],r[4]||null])};}
+  ordN:rows.filter(r=>Array.isArray(r[4])&&r[4].length).length,rows:rows.map(r=>[r[0],r[1],r[2],r[3],r[4]||null])};}
 exports.data=g=>built[g]||build(g);
 // 越南：開獎更新後寫進資料庫（期別一律以開獎日期為準）
 exports.putVN=async(g,rows)=>{if(!GAMES[g]||!pool())return 0;const n=await put(g,rows.filter(r=>/^\d{8}(\d{2})?$/.test(String(r.period))));if(n)await load();return n;};
