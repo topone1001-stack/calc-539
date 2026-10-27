@@ -30,3 +30,14 @@ jobs:
             echo "try $i -> $code"; sleep 30
           done
           exit 1
+  links:
+    # 每天台北 00:00 檢查網站所有對外連結與按鈕（有打不開的就讓這個工作失敗，GitHub 會通知）
+    if: github.event.schedule == '0 16 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: 檢查對外連結與按鈕
+        run: node tests/links.check.js
