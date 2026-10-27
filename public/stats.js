@@ -1,8 +1,11 @@
 // 開獎統計分析（資料由伺服器預先整理，前端依範圍即時計算）
 const H=x=>String(x==null?'':x).replace(/[&<>"'`]/g,c=>'&#'+c.charCodeAt(0)+';'),$=i=>document.getElementById(i),pad=n=>String(n).padStart(2,'0'),fmt=n=>Number(n).toLocaleString('zh-TW');
-const GM={'539':{name:'今彩539',c:'#ea580c',b:'#fb923c'},lotto:{name:'大樂透',c:'#ca8a04',b:'#fde047'},super:{name:'威力彩',c:'#be185d',b:'#f9a8d4'},ca:{name:'加州天天樂',c:'#1d4ed8',b:'#60a5fa'},hk:{name:'香港六合彩',c:'#7e22ce',b:'#c084fc'}};
+const GM={'539':{name:'今彩539',c:'#ea580c',b:'#fb923c'},lotto:{name:'大樂透',c:'#ca8a04',b:'#fde047'},super:{name:'威力彩',c:'#be185d',b:'#f9a8d4'},ca:{name:'加州天天樂',c:'#1d4ed8',b:'#60a5fa'},hk:{name:'香港六合彩',c:'#7e22ce',b:'#c084fc'},vn655:{name:'越南 Power 6/55',c:'#15803d',b:'#4ade80'},vn645:{name:'越南 Mega 6/45',c:'#0f766e',b:'#5eead4'},vn535:{name:'越南 Lotto 5/35',c:'#65a30d',b:'#bef264'}};
+const isVN=()=>D&&String(D.g).startsWith('vn');
+// 期別標籤：越南用日期（5/35 加時段）
+const lb=r=>String(r[0]).length>=8&&isVN()?r[1].slice(5)+(String(r[0]).length>8?' '+String(r[0]).slice(8)+'時':''):String(r[0]).slice(-3);
 let ME={},D=null,R=[],SEL=new Set(),charts={},CSRF='';
-const TABS=[['hist','📜 歷史／查詢','hist'],['num','🔢 號碼統計','stats'],['trend','📈 走勢','stats'],['adv','🧪 進階分析','adv'],['share','🔥 熱門分享','share'],['sand','🎲 沙盤浮字','fun'],['mine','⭐ 我的號碼','mynum'],['other','🎰 3星/4星/Bingo','other']];
+const TABS=[['hist','📜 歷史／查詢','hist'],['num','🔢 號碼統計','stats'],['trend','📈 走勢','stats'],['adv','🧪 進階分析','adv'],['ord','🎯 落球順序','adv'],['share','🔥 熱門分享','share'],['sand','🎲 沙盤浮字','fun'],['mine','⭐ 我的號碼','mynum'],['other','🎰 3星/4星/Bingo','other']];
 const ball=(n,sp)=>`<span class="ball${sp?' sp':''}${SEL.has(n)&&!sp?' sel':''}" data-n="${n}">${pad(n)}</span>`;
 const api=(u,o)=>fetch(u,o).then(r=>r.json());
 const post=(u,b)=>api(u,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF':CSRF},body:JSON.stringify(b)});
@@ -23,14 +26,22 @@ async function load(){const g=$('g').value;document.documentElement.style.setPro
  if(D.importing)$('info').dataset.imp=1;applyRange();}
 $('g').onchange=load;
 let tab=localStorage.getItem('stats.tab')||'';
-function render(){const p=$('pane-'+tab);if(!p)return;({hist:rHist,num:rNum,trend:rTrend,adv:rAdv,share:rShare,sand:rSand,mine:rMine,other:rOther})[tab](p);tray();}
+function render(){const p=$('pane-'+tab);if(!p)return;if(isVN()&&tab==='sand'){p.innerHTML='<div class="card2"><p class="note">越南彩不提供隨機選號功能。</p></div>';return;}({hist:rHist,num:rNum,trend:rTrend,adv:rAdv,ord:rOrd,share:rShare,sand:rSand,mine:rMine,other:rOther})[tab](p);tray();}
+// ---- 落球順序（只用官方提供的落球順序；依目前範圍統計各球位）----
+let oq='';
+function rOrd(p){const rows=R.filter(r=>Array.isArray(r[4])&&r[4].length);if(!rows.length){p.innerHTML=`<div class="card2"><h3>🎯 落球順序</h3><p class="note">${H(GM[D.g].name)}：官方未提供落球順序，無法統計。</p></div>`;return;}
+ const n=D.n,pos=Array.from({length:n},()=>Array(D.max+1).fill(0));rows.forEach(r=>r[4].forEach((x,i)=>{if(i<n&&x>=1&&x<=D.max)pos[i][x]++;}));
+ const fb=Array(D.max+1).fill(0),lb2=Array(D.max+1).fill(0);rows.forEach(r=>{fb[r[4][0]]++;lb2[r[4][r[4].length-1]]++;});
+ p.innerHTML=`<div class="card2"><h3>各球位最常開出的號碼（範圍內 ${fmt(rows.length)} 期有落球順序）</h3><p class="note">⚠️ 歷史統計，非預測；每期開獎都是獨立隨機</p>
+ <table><tr><th>球位</th><th>前 5 名（次數）</th></tr>${pos.map((c,i)=>`<tr><td>第 ${i+1} 球</td><td style="text-align:left">${nums(D.max).sort((a,b)=>c[b]-c[a]).slice(0,5).map(x=>`<span class="chip" data-n="${x}">${pad(x)} <b>${c[x]}</b></span>`).join('')}</td></tr>`).join('')}</table></div>
+ <div class="card2"><h3>歷史落球順序查詢</h3><div class="bar"><input id="oq" placeholder="期別或日期（例 2026-10、115000259）" value="${H(oq)}" style="flex:1;min-width:200px"></div><p class="note">${oq?'符合 '+fmt(rows.filter(r=>String(r[0]).includes(oq)||r[1].includes(oq)).length)+' 期，顯示最近 50 期':'顯示最近 30 期'}</p><table><tr><th>期別</th><th>日期</th><th>大小順序／落球順序</th></tr>${(oq?rows.filter(r=>String(r[0]).includes(oq)||r[1].includes(oq)).slice(-50):rows.slice(-30)).reverse().map(r=>`<tr><td>${H(r[0])}</td><td>${H(r[1])}</td><td style="text-align:left">大小：${r[2].map(x=>ball(x)).join('')}<br>落球：${r[4].map(x=>ball(x)).join('')}</td></tr>`).join('')}</table></div>`;$('oq').onchange=e=>{oq=e.target.value.trim();rOrd(p);tray();};}
 // ---- 1. 歷史／查詢 ----
 let hp=0,hdesc=true,hball=true,hq='';
 function rHist(p){let rows=R.slice();if(hq){const nums=(hq.match(/\d+/g)||[]).map(Number);rows=rows.filter(r=>r[0].includes(hq)||r[1].includes(hq)||(nums.length&&nums.every(n=>r[2].includes(n)||r[3]===n)));}
  if(hdesc)rows.reverse();const per=20,pages=Math.max(1,Math.ceil(rows.length/per));hp=Math.min(hp,pages-1);const pg=rows.slice(hp*per,hp*per+per);
  p.innerHTML=`<div class="card2"><h3>快速查詢</h3><div class="bar"><input id="hq" placeholder="期別、日期(2026-10)、或號碼(例 5 12)" value="${H(hq)}" style="flex:1;min-width:200px"><button class="btn2" id="hsort">${hdesc?'新→舊':'舊→新'}</button><button class="btn2 g" id="hview">${hball?'球號':'文字'}</button></div>
  <p class="note">找到 ${fmt(rows.length)} 期。查號碼＝同時包含這些號碼的期數；點號碼加入選號。</p>
- <table><tr><th>期別</th><th>日期</th><th>開獎號碼</th><th></th></tr>${pg.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td style="text-align:left">${hball?r[2].map(n=>ball(n)).join('')+(r[3]!=null?ball(r[3],1):''):r[2].map(pad).join(' ')+(r[3]!=null?' ＋'+pad(r[3]):'')}</td><td><button class="btn2 g" data-use="${r[2].join(',')}">用這組</button></td></tr>`).join('')}</table>
+ <table><tr><th>期別</th><th>日期</th><th>開獎號碼</th><th></th></tr>${pg.map(r=>`<tr><td>${H(r[0])}</td><td>${H(r[1])}</td><td style="text-align:left">${hball?r[2].map(n=>ball(n)).join('')+(r[3]!=null?ball(r[3],1):''):r[2].map(pad).join(' ')+(r[3]!=null?' ＋'+pad(r[3]):'')}</td><td><button class="btn2 g" data-use="${r[2].join(',')}">用這組</button></td></tr>`).join('')}</table>
  <div class="pg"><button class="btn2 g" id="hp0">«</button><button class="btn2 g" id="hpp">‹</button><span>${hp+1} / ${pages}</span><button class="btn2 g" id="hpn">›</button><button class="btn2 g" id="hpl">»</button></div></div>`;
  $('hq').onchange=e=>{hq=e.target.value.trim();hp=0;rHist(p);tray();};$('hsort').onclick=()=>{hdesc=!hdesc;hp=0;rHist(p);tray();};$('hview').onclick=()=>{hball=!hball;rHist(p);tray();};
  $('hp0').onclick=()=>{hp=0;rHist(p);tray();};$('hpp').onclick=()=>{hp=Math.max(0,hp-1);rHist(p);tray();};$('hpn').onclick=()=>{hp=Math.min(pages-1,hp+1);rHist(p);tray();};$('hpl').onclick=()=>{hp=pages-1;rHist(p);tray();};
@@ -55,11 +66,11 @@ function rNum(p){const s=stat(),ns=nums(s.mx),exp=s.N*D.n/s.mx;const hot=ns.slic
 function rTrend(p){const L=R.slice(-20),L30=R.slice(-30),tail=r=>r[2].reduce((a,n)=>a+n%10,0);
  p.innerHTML=`<div class="card2"><h3>位數走勢（號碼由小到大的第 1～${D.n} 位，最近 20 期）</h3><div style="height:280px"><canvas id="cPos"></canvas></div></div>
  <div class="card2"><h3>尾數合走勢（各號個位數相加，最近 30 期）</h3><div style="height:220px"><canvas id="cTail"></canvas></div>
- <div class="bar"><label>指定尾數合 <input id="ts" type="number" min="0" max="${9*D.n}" value="${L30.length?tail(L30[L30.length-1]):20}" style="width:80px"></label><button class="btn2" id="tgo">🎲 隨機產生一組</button><span id="tout"></span></div></div>`;
+ <div class="bar"><label>指定尾數合 <input id="ts" type="number" min="0" max="${9*D.n}" value="${L30.length?tail(L30[L30.length-1]):20}" style="width:80px"></label>${isVN()?'':'<button class="btn2" id="tgo">🎲 隨機產生一組</button>'}<span id="tout"></span></div></div>`;
  const cols=['#f87171','#fb923c','#facc15','#4ade80','#38bdf8','#a78bfa'];
- chart('cPos',{type:'line',data:{labels:L.map(r=>r[0].slice(-3)),datasets:Array.from({length:D.n},(_,i)=>({label:'第'+(i+1)+'位',data:L.map(r=>r[2][i]),borderColor:cols[i],backgroundColor:cols[i],tension:.25}))},options:{maintainAspectRatio:false,interaction:{mode:'index',intersect:false}}});
- chart('cTail',{type:'line',data:{labels:L30.map(r=>r[0].slice(-3)),datasets:[{label:'尾數合',data:L30.map(tail),borderColor:GM[D.g].b,backgroundColor:GM[D.g].c,tension:.25}]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}}}});
- $('tgo').onclick=()=>{const t=+$('ts').value;for(let k=0;k<20000;k++){const a=new Set();while(a.size<D.n)a.add(1+Math.floor(Math.random()*D.max));const x=[...a].sort((p,q)=>p-q);if(x.reduce((s,n)=>s+n%10,0)===t){$('tout').innerHTML=x.map(n=>ball(n)).join('')+` <button class="btn2 g" id="tuse">用這組</button>`;$('tuse').onclick=()=>{SEL=new Set(x);tray();};tray();return;}}$('tout').textContent='找不到符合的組合';};}
+ chart('cPos',{type:'line',data:{labels:L.map(lb),datasets:Array.from({length:D.n},(_,i)=>({label:'第'+(i+1)+'位',data:L.map(r=>r[2][i]),borderColor:cols[i],backgroundColor:cols[i],tension:.25}))},options:{maintainAspectRatio:false,interaction:{mode:'index',intersect:false}}});
+ chart('cTail',{type:'line',data:{labels:L30.map(lb),datasets:[{label:'尾數合',data:L30.map(tail),borderColor:GM[D.g].b,backgroundColor:GM[D.g].c,tension:.25}]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}}}});
+ if($('tgo'))$('tgo').onclick=()=>{const t=+$('ts').value;for(let k=0;k<20000;k++){const a=new Set();while(a.size<D.n)a.add(1+Math.floor(Math.random()*D.max));const x=[...a].sort((p,q)=>p-q);if(x.reduce((s,n)=>s+n%10,0)===t){$('tout').innerHTML=x.map(n=>ball(n)).join('')+` <button class="btn2 g" id="tuse">用這組</button>`;$('tuse').onclick=()=>{SEL=new Set(x);tray();};tray();return;}}$('tout').textContent='找不到符合的組合';};}
 // ---- 4. 進階（三星組合／下期機率分析／拖牌）----
 let advF='',dragX=1,dragN=1;
 function rAdv(p){const mx=D.max,s=stat();const m3=new Map();for(const r of R){const a=r[2];for(let i=0;i<a.length;i++)for(let j=i+1;j<a.length;j++)for(let k=j+1;k<a.length;k++){const key=a[i]*10000+a[j]*100+a[k];m3.set(key,(m3.get(key)||0)+1);}}
@@ -70,7 +81,7 @@ function rAdv(p){const mx=D.max,s=stat();const m3=new Map();for(const r of R){co
  <div>${top.map(([k,c])=>{const t=[Math.floor(k/10000),Math.floor(k/100)%100,k%100];return `<span class="chip" data-use="${t.join(',')}">${t.map(pad).join('-')} <b>${c}</b></span>`;}).join('')||'<span class="note">無</span>'}</div></div>
  <div class="card2"><h3>下期機率分析　<span class="note" style="color:#fbbf24">⚠️ 統計參考，非預測；每期開獎都是獨立隨機</span></h3><p class="note">分數＝範圍內頻率 40%＋最近 30 期頻率 40%＋未開期數 20%（50 分＝平均）</p>
  <div>${score.slice(0,12).map(x=>`<span class="chip" data-n="${x.n}">${pad(x.n)} <b>${x.v.toFixed(0)}</b></span>`).join('')}</div><button class="btn2" id="usetop" style="margin-top:6px">把前 ${D.n} 名加入選號</button>
- <h3 style="margin-top:10px">最近 30 期走勢圖（■＝開出）</h3><div style="overflow:auto"><table class="heat"><tr><th>期</th>${nums(mx).map(n=>`<th>${n}</th>`).join('')}</tr>${L30.slice().reverse().map(r=>`<tr><td style="font-size:10px;width:auto;padding:0 3px">${r[0].slice(-3)}</td>${nums(mx).map(n=>`<td style="background:${r[2].includes(n)?GM[D.g].c:'transparent'}">${r[2].includes(n)?n:''}</td>`).join('')}</tr>`).join('')}</table></div></div>
+ <h3 style="margin-top:10px">最近 30 期走勢圖（■＝開出）</h3><div style="overflow:auto"><table class="heat"><tr><th>期</th>${nums(mx).map(n=>`<th>${n}</th>`).join('')}</tr>${L30.slice().reverse().map(r=>`<tr><td style="font-size:10px;width:auto;padding:0 3px">${H(lb(r))}</td>${nums(mx).map(n=>`<td style="background:${r[2].includes(n)?GM[D.g].c:'transparent'}">${r[2].includes(n)?n:''}</td>`).join('')}</tr>`).join('')}</table></div></div>
  <div class="card2"><h3>拖牌分析（某號開出後，第 N 期各號的開出率）</h3><div class="bar"><label>當 <select id="dx">${nums(mx).map(n=>`<option ${n===dragX?'selected':''}>${n}</option>`).join('')}</select> 開出後</label><label>第 <select id="dn">${[1,2,3,4,5].map(n=>`<option ${n===dragN?'selected':''}>${n}</option>`).join('')}</select> 期</label></div><div id="dout"></div></div>`;
  const doDrag=()=>{const c=Array(mx+1).fill(0);let t=0;R.forEach((r,i)=>{if(r[2].includes(dragX)&&i+dragN<R.length){t++;R[i+dragN][2].forEach(n=>c[n]++);}});const rows=nums(mx).sort((a,b)=>c[b]-c[a]).slice(0,15);
   $('dout').innerHTML=t?`<p class="note">${pad(dragX)} 在範圍內開出 ${t} 次（可對照）；一般機率約 ${(D.n/mx*100).toFixed(1)}%</p><table><tr><th>號碼</th><th>次數</th><th>開出率</th></tr>${rows.map(n=>`<tr><td>${ball(n)}</td><td>${c[n]}</td><td>${(c[n]/t*100).toFixed(1)}%</td></tr>`).join('')}</table>`:'<p class="note">範圍內樣本不足</p>';tray();};

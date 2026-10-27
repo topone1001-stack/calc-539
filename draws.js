@@ -9,8 +9,8 @@ async function get(kind,key){let out=[];for(const m of months()){const r=await f
 async function refresh(){try{
  const a=await get('Daily539Result','daily539Res'),b=await get('Lotto649Result','lotto649Res'),c=await get('SuperLotto638Result','superLotto638Res');
  cache={...cache,updated:new Date().toISOString(),
-  d539:a.slice(0,20).map(x=>({period:x.period,date:x.lotteryDate.slice(0,10),nums:x.drawNumberSize})),
-  super:c.slice(0,20).map(x=>({period:x.period,date:x.lotteryDate.slice(0,10),nums:x.drawNumberSize.slice(0,6).sort((p,q)=>p-q),special:x.drawNumberSize[6]})),lotto:b.slice(0,20).map(x=>({period:x.period,date:x.lotteryDate.slice(0,10),nums:x.drawNumberSize.slice(0,6).sort((p,q)=>p-q),special:x.drawNumberSize[6]}))};
+  d539:a.slice(0,20).map(x=>({period:x.period,date:x.lotteryDate.slice(0,10),nums:x.drawNumberSize,order:(x.drawNumberAppear||[]).slice(0,5)})),
+  super:c.slice(0,20).map(x=>({period:x.period,date:x.lotteryDate.slice(0,10),nums:x.drawNumberSize.slice(0,6).sort((p,q)=>p-q),special:x.drawNumberSize[6],order:(x.drawNumberAppear||[]).slice(0,6)})),lotto:b.slice(0,20).map(x=>({period:x.period,date:x.lotteryDate.slice(0,10),nums:x.drawNumberSize.slice(0,6).sort((p,q)=>p-q),special:x.drawNumberSize[6],order:(x.drawNumberAppear||[]).slice(0,6)}))};
  save();console.log('draws updated',cache.d539[0]&&cache.d539[0].period);}catch(e){console.error('draws fetch failed:',e.message);}}
 let last=0;function tick(){const d=tpe(),dow=d.getUTCDay(),hm=d.getUTCHours()*60+d.getUTCMinutes();
  const live=dow>=1&&dow<=6&&hm>=20*60+30&&hm<=22*60;if(live||Date.now()-last>3*3600e3){last=Date.now();refresh();}}
@@ -56,9 +56,15 @@ async function refreshOther(){try{const m=tpe().toISOString().slice(0,7),o={};
  o.updated=new Date().toISOString();cache.other=o;save();}catch(e){console.error('other fetch failed:',e.message);}}
 exports.refreshOther=refreshOther;
 // ---- 即時更新：開獎時段每 1–2 分鐘問官方，直到新一期出現 ----
-const SC=require('./sched');let ver='';const listeners=[];const lastTry={tw:0,ca:0,hk:0,vn:0};const VN=require('./vn');let vnLast=0;const refreshVN=()=>{vnLast=Date.now();return VN.refreshVN(()=>cache,save);};
+const SC=require('./sched');let ver='';const listeners=[];const lastTry={tw:0,ca:0,hk:0,vn:0};const VN=require('./vn');let vnLast=0;const refreshVN=()=>{vnLast=Date.now();return VN.refreshVN(()=>cache,save,(g,rows)=>require('./hist').putVN(g,rows));};
 const RUN={tw:()=>refresh(),ca:()=>refreshCA(),hk:()=>refreshHK(),vn:()=>refreshVN()};
-function bump(){const v=SC.verOf(cache);if(v===ver)return false;const was=ver;ver=v;cache.ver=v;if(!was)return false;listeners.forEach(f=>{try{f(v)}catch(e){console.error('onNew',e.message);}});return true;}
+// 開獎首次看到的時間紀錄（之後依實際資料收窄等待時段）
+const KEYS=SC.KEYS;let lastP=null;const latestOf=(c,k)=>{const x=c&&c[k];return Array.isArray(x)?x[0]:x&&x.latest;};
+function seen(now=Date.now()){const cur={};KEYS.forEach(k=>{const r=latestOf(cache,k);cur[k]=r?String(r.period):'';});const prev=lastP;lastP=cur;if(!prev)return [];
+ const t=new Date(now+8*3600e3).toISOString(),min=t.slice(0,10)+' '+t.slice(11,16);const add=KEYS.filter(k=>cur[k]&&prev[k]&&cur[k]!==prev[k]).map(k=>{const r=latestOf(cache,k);return {game:k,period:cur[k],date:String(r.date).slice(0,10),seen:min};});
+ if(add.length){add.forEach(x=>console.log('draw seen',x.game,x.date,x.period,'at',x.seen,'Taipei'));const L=(S.get('drawSeen')||[]).concat(add).slice(-500);S.set('drawSeen',L).catch(()=>{});}return add;}
+exports._seen=seen;
+function bump(){const v=SC.verOf(cache);if(v===ver)return false;const was=ver;ver=v;cache.ver=v;seen();if(!was)return false;listeners.forEach(f=>{try{f(v)}catch(e){console.error('onNew',e.message);}});return true;}
 async function fast(now=Date.now()){for(const s of ['tw','ca','hk','vn']){const st=SC.status(s,now,cache);if(!st.wait||now-lastTry[s]<SC.EVERY[s]-5e3)continue;lastTry[s]=now;
   try{await RUN[s]();}catch(e){}if(bump())console.log('new draw',s,ver);}}
 exports.fast=fast;exports.onNew=f=>listeners.push(f);exports.ver=()=>ver||SC.verOf(cache);exports.live=()=>SC.anyWaiting(Date.now(),cache);

@@ -82,14 +82,14 @@ DR.onNew(()=>HI.syncRecent().catch(e=>console.error('sync after new draw',e.mess
 // ---- 統計／歷史 API ----
 const can=(...f)=>(q,s,n)=>f.some(x=>q.u.perms.includes(x))?n():s.status(403).json({error:'無權限'});
 const jchk=(q,s,n)=>{const t=q.get('X-CSRF')||'',r=q.session.csrf||'';if(r&&t.length===r.length&&crypto.timingSafeEqual(Buffer.from(t),Buffer.from(r)))return n();susp(q,'CSRF 驗證失敗',q.path);s.status(403).json({error:'CSRF'});};
-const GK=['539','lotto','super','ca','hk'];
+const GK=['539','lotto','super','ca','hk','vn655','vn645','vn535'];
 app.get('/stats',auth,(q,s)=>s.sendFile(P('stats.html')));
 app.get('/stats.js',auth,(q,s)=>s.sendFile(P('stats.js')));
 app.get('/api/hist/:g',auth,can('hist','stats','adv','share','fun'),(q,s)=>{const g=q.params.g;if(!GK.includes(g))return s.status(404).end();const d={...HI.data(g),importing:HI.importing()};const tag='"'+g+d.total+(d.last||'')+d.importing+'"';if(q.get('If-None-Match')===tag)return s.status(304).end();s.set({ETag:tag,'Cache-Control':'private, no-cache'}).json(d);});
 app.get('/api/hist-status',auth,admin,(q,s)=>s.json({...HI.status(),counts:Object.fromEntries(GK.map(g=>[g,HI.data(g).total]))}));
 app.get('/api/csrf',auth,(q,s)=>s.json({csrf:csrf(q)}));
 app.get('/api/mysets',auth,can('mynum'),(q,s)=>s.json({sets:q.u.sets}));
-app.post('/api/mysets',auth,can('mynum'),jchk,(q,s)=>{const sets=(Array.isArray(q.body.sets)?q.body.sets:[]).slice(0,2).map(x=>({game:GK.includes(x.game)?x.game:'539',name:String(x.name||'').replace(/[<>"'&`]/g,'').slice(0,20),nums:[...new Set((x.nums||[]).map(Number).filter(n=>n>=1&&n<=49))].slice(0,12)}));
+app.post('/api/mysets',auth,can('mynum'),jchk,(q,s)=>{const sets=(Array.isArray(q.body.sets)?q.body.sets:[]).slice(0,2).map(x=>({game:GK.includes(x.game)?x.game:'539',name:String(x.name||'').replace(/[<>"'&`]/g,'').slice(0,20),nums:[...new Set((x.nums||[]).map(Number).filter(n=>n>=1&&n<=55))].slice(0,12)}));
  const us=U.load();us[q.session.user]={...us[q.session.user],sets};U.save(us);oplog(q,'修改我的號碼',q.session.user,sets.map(x=>x.nums.length+'碼').join('/'));s.json({ok:true,sets});});
 // 彩迷熱門號碼分享：每人每期每遊戲一次，最多 10 碼
 const nextKey=g=>{const d=HI.data(g);const L=d.rows[d.rows.length-1];if(!L)return 'next';if(g==='hk'){const [y,n]=L[0].split('/');return y+'/'+String(+n+1).padStart(3,'0');}return String(+L[0]+1);};
@@ -107,6 +107,7 @@ let cronLast=null;
 app.all('/cron',async(q,s)=>{const tk=process.env.CRON_TOKEN||'',got=q.get('X-Cron-Token')||'';if(!tk||got.length!==tk.length||!crypto.timingSafeEqual(Buffer.from(got),Buffer.from(tk))){susp(q,'cron 未授權','');return s.status(403).json({error:'forbidden'});}
  const t0=Date.now();await DR.refreshAll();const added=await HI.syncRecent();cronLast={at:new Date().toISOString(),added,ms:Date.now()-t0};
  const st=S.get('cronlog')||[];st.unshift(cronLast);S.set('cronlog',st.slice(0,50)).catch(()=>{});s.json({ok:true,...cronLast,counts:Object.fromEntries(GK.map(g=>[g,HI.data(g).total]))});});
+app.get('/api/draw-seen',auth,admin,(q,s)=>s.set('Cache-Control','no-store').json(S.get('drawSeen')||[]));
 app.get('/api/cron-log',auth,admin,(q,s)=>s.json(S.get('cronlog')||[]));
 app.get('/me',auth,(q,s)=>s.json({user:q.session.user,role:q.u.role,perms:q.u.perms,sets:q.u.perms.includes('mynum')?q.u.sets:[]}));
 // ---- 後台：管理員／代理（多層）----

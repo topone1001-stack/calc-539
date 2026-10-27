@@ -9,6 +9,8 @@ function la(now){const s=new Date(now).toLocaleString('en-US',{timeZone:'America
 // 台灣彩券：539 週一至六、大樂透週二五、威力彩週一四，20:30 開獎，官方約 20:45–21:30 公布
 // 越南 Vietlott：Power 6/55 週二四六、Mega 6/45 週三五日，台北 19:00 開獎
 const VN_DAYS={vn655:[2,4,6],vn645:[0,3,5]};
+// Lotto 5/35：每天 13:00、21:00（越南）＝台北 14:00、22:00；各等 3 小時（同其他越南彩）、跨午夜不等
+const VN535=[{slot:'13',win:[14*60,17*60]},{slot:'21',win:[22*60,23*60+59]}];
 const TW_DAYS={d539:[1,2,3,4,5,6],lotto:[2,5],super:[1,4]};
 // 各來源的等待時段：[開始分鐘, 結束分鐘]，以該來源當地日期為準
 const WIN={tw:[20*60+30,22*60+30],ca:[18*60+30,21*60],hk:[21*60+25,23*60],vn:[19*60,22*60]};
@@ -20,11 +22,13 @@ function status(src,now,cache){
  if(src==='ca'){const t=la(now);const inWin=t.hm>=WIN.ca[0]&&t.hm<=WIN.ca[1];return {wait:inWin&&latestDate(cache,'ca')!==t.date,due:t.date,games:['ca']};}
  if(src==='hk'){const t=tpe(now);// 六合彩每週約 3–4 期、日期由馬會公布，所以每天這段都查（間隔較長）
   const inWin=t.hm>=WIN.hk[0]&&t.hm<=WIN.hk[1];return {wait:inWin&&latestDate(cache,'hk')!==t.date,due:t.date,games:['hk']};}
- if(src==='vn'){const t=tpe(now);const games=Object.keys(VN_DAYS).filter(k=>VN_DAYS[k].includes(t.dow)&&latestDate(cache,k)!==t.date);
-  const inWin=t.hm>=WIN.vn[0]&&t.hm<=WIN.vn[1];return {wait:inWin&&games.length>0,due:t.date,games};}
+ if(src==='vn'){const t=tpe(now);const inWin=t.hm>=WIN.vn[0]&&t.hm<=WIN.vn[1];const games=inWin?Object.keys(VN_DAYS).filter(k=>VN_DAYS[k].includes(t.dow)&&latestDate(cache,k)!==t.date):[];
+  const s=VN535.find(x=>t.hm>=x.win[0]&&t.hm<=x.win[1]);if(s){const h=(cache&&cache.vn535&&cache.vn535.hist)||[],id=t.date.replace(/-/g,'')+s.slot;if(!h.some(x=>String(x.period)===id))games.push('vn535');}
+  return {wait:games.length>0,due:t.date,games};}
  return {wait:false};}
 const EVERY={tw:60e3,ca:60e3,hk:120e3,vn:60e3};// 等待中每 1–2 分鐘問一次官方
 function anyWaiting(now,cache){return ['tw','ca','hk','vn'].some(s=>status(s,now,cache).wait);}
 // 「版本」＝各彩種最新一期期別；有變就代表有新開獎
-function verOf(c){c=c||{};return ['d539','lotto','super','ca','hk','vn655','vn645'].map(k=>{const x=c[k];const r=Array.isArray(x)?x[0]:x&&x.latest;return r?r.period:'';}).join('|');}
-module.exports={status,anyWaiting,verOf,EVERY,WIN,tpe,la};
+const KEYS=['d539','lotto','super','ca','hk','vn655','vn645','vn535'];
+function verOf(c){c=c||{};return KEYS.map(k=>{const x=c[k];const r=Array.isArray(x)?x[0]:x&&x.latest;return r?r.period:'';}).join('|');}
+module.exports={KEYS,VN535,status,anyWaiting,verOf,EVERY,WIN,tpe,la};
