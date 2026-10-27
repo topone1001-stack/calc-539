@@ -24,10 +24,17 @@ function parseMagayo(t,g,slot){const N=G[g].n;const out=[];const D=s=>{const m=s
   out.push({date:d,nums:nums.sort((x,y)=>x-y),special:G[g].sp&&b?spOk(+(b.match(/\d+/)||[])[0]):null});}
  const seen=new Set();return out.filter(x=>!seen.has(x.date)&&seen.add(x.date)).map(x=>({period:dkey(x.date,slot),...x})).filter(x=>valid(x,g)).slice(0,30);}
 const MG='https://www.magayo.com/zht/lotto-results/vietnam/';
+// xoso.com.vn：越南本地開獎結果站，開獎後幾分鐘內公布，台灣打得開；Power/Mega 為主要來源，magayo 備援（也讓部署維運的 magayo 比對成為獨立第二來源）
+const XS={vn655:'https://xoso.com.vn/xo-so-power-655.html',vn645:'https://xoso.com.vn/xo-so-tu-chon-mega-645.html'};
+function parseXoso(t,g){const out=[];const re=/(\d{2})\/(\d{2})\/(\d{4})<\/a><\/h2>[\s\S]{0,300}?#0*(\d+)<\/strong><\/div><div class=jackpot-item>([\s\S]*?)<\/div>/g;let m;
+ while((m=re.exec(t))&&out.length<30){const all=[...m[5].matchAll(/<span class="?btn-results( bg_jackpot)?"?>\s*(\d{1,2})\s*<\/span>/g)];const main=all.filter(x=>!x[1]).map(x=>+x[2]),sp=all.find(x=>x[1]);
+  const date=`${m[3]}-${m[2]}-${m[1]}`;out.push({period:dkey(date),no:String(m[4]).padStart(5,'0'),date,nums:main.sort((a,c)=>a-c),special:G[g].sp&&sp?spOk(+sp[2]):null});}
+ return out.filter(x=>valid(x,g)&&(!G[g].sp||x.special));}
 async function fetchGame(g){try{const t=await get(G[g].off);if(g==='vn535')throw new Error('official 5/35 format unverified');const h=parseOfficial(t,g);if(h.length)return {src:'official',hist:h};throw new Error('parse');}
- catch(e){let h=[];if(Array.isArray(G[g].mg)){for(let i=0;i<G[g].mg.length;i++){try{h=h.concat(parseMagayo(await get(MG+G[g].mg[i]+'/'),g,G[g].slots[i]));}catch(e2){console.error('vn magayo',G[g].mg[i],e2.message);}}}
+ catch(e){if(XS[g]){try{const h=parseXoso(await get(XS[g]),g);if(h.length)return {src:'xoso',why:e.message,hist:h};}catch(e2){console.error('vn xoso',g,e2.message);}}
+  let h=[];if(Array.isArray(G[g].mg)){for(let i=0;i<G[g].mg.length;i++){try{h=h.concat(parseMagayo(await get(MG+G[g].mg[i]+'/'),g,G[g].slots[i]));}catch(e2){console.error('vn magayo',G[g].mg[i],e2.message);}}}
   else h=parseMagayo(await get(MG+G[g].mg+'/'),g);if(!h.length)throw new Error('magayo parse');return {src:'magayo',why:e.message,hist:h};}}
 // 合併新舊資料：以期別（日期）為鍵，新的優先；保留最近 30 期
 const merge=(a,b)=>{const m=new Map();for(const x of [...(b||[]),...(a||[])])m.set(String(x.period),x);return [...m.values()].sort((x,y)=>String(y.period).localeCompare(String(x.period))).slice(0,30);};
 async function refreshVN(cur,save,store){const C=()=>typeof cur==='function'?cur():cur;for(const g of Object.keys(G)){try{const r=await fetchGame(g);const old=(C()[g]||{}).hist||[];const hist=merge(r.hist,old.filter(x=>/^\d{8}(\d{2})?$/.test(String(x.period))));C()[g]={updated:new Date().toISOString(),src:r.src,latest:hist[0],hist};console.log('vn updated',g,r.src,hist[0].period);if(store)try{await store(g,r.hist);}catch(e){console.error('vn store',g,e.message);}}catch(e){console.error('vn fetch failed',g,e.message);}}save();}
-module.exports={refreshVN,parseOfficial,parseMagayo,merge,GAMES:G};
+module.exports={refreshVN,parseOfficial,parseMagayo,parseXoso,merge,GAMES:G};

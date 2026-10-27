@@ -26,7 +26,7 @@ function status(src,now,cache){
   const s=VN535.find(x=>t.hm>=x.win[0]&&t.hm<=x.win[1]);if(s){const h=(cache&&cache.vn535&&cache.vn535.hist)||[],id=t.date.replace(/-/g,'')+s.slot;if(!h.some(x=>String(x.period)===id))games.push('vn535');}
   return {wait:games.length>0,due:t.date,games};}
  return {wait:false};}
-const EVERY={tw:60e3,ca:60e3,hk:120e3,vn:60e3};// 等待中每 1–2 分鐘問一次官方
+const EVERY={tw:60e3,ca:60e3,hk:60e3,vn:60e3};// 等待中每 1 分鐘問一次來源，新一期出現就停
 function anyWaiting(now,cache){return ['tw','ca','hk','vn'].some(s=>status(s,now,cache).wait);}
 // 「版本」＝各彩種最新一期期別；有變就代表有新開獎
 const KEYS=['d539','lotto','super','ca','hk','vn655','vn645','vn535'];
