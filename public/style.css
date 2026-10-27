@@ -78,7 +78,7 @@ body{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
 #laybtn:hover,#laybtn:focus-visible,#laybtn.on{opacity:1}
 body{position:relative;padding-bottom:calc(76px + env(safe-area-inset-bottom))}
 .drawbox summary{display:flex;align-items:center;min-height:44px;padding:6px 2px;cursor:pointer;list-style-position:inside}
-.drawbox summary::before{content:'▸';margin-right:6px}.drawbox details[open]>summary::before{content:'▾'}
+.drawbox summary::before{content:'▸';margin-right:6px}.drawbox details[open]>summary::before,details.drawbox[open]>summary::before{content:'▾'}
 .drawbox summary::-webkit-details-marker{display:none}.drawbox summary{list-style:none}
 .drawbox .note a,.drawbox .meta a{display:inline-flex;align-items:center;min-height:44px;padding:0 10px;margin:2px 2px;border:1px solid #475569;border-radius:16px;background:#1e293b;color:#93c5fd;text-decoration:none;font-size:12.5px}
 #livebox .vbtn{display:inline-flex;align-items:center;min-height:44px;padding:0 14px}
