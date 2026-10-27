@@ -17,7 +17,7 @@ let LAST=null;const pad=n=>String(n).padStart(2,'0'),balls=(a,hit=[],sp)=>a.map(
 function mine(){const el=document.getElementById('mine');if(!el)return[];return [...new Set((el.value.match(/\d+/g)||[]).map(Number).filter(n=>n>=1&&n<=39))];}
 function drawBox(d){const b=document.getElementById('draws');if(!b)return;const L=d.d539[0];const gs=document.getElementById('game');LAST=gs&&gs.value==='ca'?(d.ca&&d.ca.latest):L;if(!L){b.innerHTML='<p class="note">暫時取不到開獎資料</p>';return;}
  const gm=document.getElementById('game'),is539=!gm||gm.value==='539',m=mine(),hit=is539?L.nums.filter(n=>m.includes(n)):[],lo=d.lotto&&d.lotto[0];
- b.classList.add('g539');b.innerHTML=`<span class="gb">今彩539</span> <b>最新開獎</b>　第 ${L.period} 期　${L.date}<div>${balls(L.nums,hit)}</div>`+
+ b.classList.add('g539');b.innerHTML=`<span class="gb">今彩539</span> <b>最新開獎</b>　第 ${ESC(L.period)} 期　${ESC(L.date)}<div>${balls(L.nums,hit)}</div>${ordLine(L)}`+
  (lo?`<div style="margin-top:6px"><b>大樂透</b>　第 ${lo.period} 期　${lo.date}<div>${balls(lo.nums,[],lo.special)}</div></div>`:'')+
  `<details><summary><span class="gb">539</span> 近期開獎</summary><table class="hist">${d.d539.map(x=>`<tr><td>${x.period}</td><td>${x.date}</td><td>${x.nums.map(pad).join(' ')}</td></tr>`).join('')}</table></details>`+
  `<p class="note">資料來源：台灣彩券官方網站｜更新：${d.updated?new Date(d.updated).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'}):'—'}</p>`;caBox(d.ca,is539?[]:m);}
@@ -41,7 +41,7 @@ function drawLive(force){const b=document.getElementById('livebox');if(!b)return
 // ---- 加州天天樂 ----
 function caBox(c,m){let b=document.getElementById('cabox');const d=document.getElementById('draws');if(!d)return;if(!b){b=document.createElement('div');b.id='cabox';b.className='drawbox gca';d.after(b);}
  if(!c||!c.latest){b.innerHTML='<b>加州天天樂</b><p class="note">暫時取不到開獎資料</p>';return;}const L=c.latest,usd=n=>n==null?'—':'US$'+Number(n).toLocaleString('en-US');
- b.innerHTML=`<span class="gb">加州天天樂</span> <b>Fantasy 5 最新開獎</b>　第 ${L.period} 期　${L.date}<div>${balls(L.nums,L.nums.filter(n=>m.includes(n)))}</div>`+
+ b.innerHTML=`<span class="gb">加州天天樂</span> <b>Fantasy 5 最新開獎</b>　第 ${L.period} 期　${L.date}<div>${balls(L.nums,L.nums.filter(n=>m.includes(n)))}</div>${ordLine(L)}`+
  
  `<details><summary>獎金表（第 ${L.period} 期）</summary><table class="prz"><tr><th>中獎</th><th>注數</th><th>每注</th></tr>${c.prizes.map(p=>`<tr><td>${p.desc.replace(/Matched (\d) of 5 numbers/,'中 $1 個')}</td><td>${Number(p.count).toLocaleString()}</td><td>${usd(p.amount)}</td></tr>`).join('')}</table></details>`+
  `<details><summary>近 20 期開獎</summary><table class="hist">${c.hist.map(x=>`<tr><td>${x.period}</td><td>${x.date}</td><td>${x.nums.map(pad).join(' ')}</td></tr>`).join('')}</table></details>`+
