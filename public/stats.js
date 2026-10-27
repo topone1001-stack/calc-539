@@ -79,7 +79,7 @@ function rAdv(p){const mx=D.max,s=stat();const m3=new Map();for(const r of R){co
  p.querySelectorAll('[data-use]').forEach(b=>b.onclick=()=>{b.dataset.use.split(',').map(Number).forEach(n=>SEL.add(n));tray();});}
 // ---- 5. 熱門分享 ----
 async function rShare(p){const g=D.g,x=await api('/api/share/'+g);const ns=nums(D.max);const pick=new Set(x.mine||[]);
- p.innerHTML=`<div class="card2"><h3>彩迷熱門號碼（第 ${x.period} 期，${x.users} 人分享）</h3><div style="height:240px"><canvas id="cSh"></canvas></div></div>
+ p.innerHTML=`<div class="card2"><h3>彩迷熱門號碼（${x.period==='next'?'下一期':'第 '+x.period+' 期'}，${x.users} 人分享）</h3><div style="height:240px"><canvas id="cSh"></canvas></div></div>
  <div class="card2"><h3>${x.mine?'你本期已分享：'+x.mine.map(pad).join(' ')+' <button class="btn2" id="sdel" style="margin-left:8px">撤回我的分享</button> <span id="smsg" class="note"></span>':'分享我的號碼（最多 10 碼，每期一次）'}</h3>${x.mine?'':`<div class="grid" id="sg">${ns.map(n=>`<button data-p="${n}">${pad(n)}</button>`).join('')}</div><button class="btn2" id="sgo" style="margin-top:8px">送出分享</button> <span id="smsg" class="note"></span>`}</div>`;
  chart('cSh',{type:'bar',data:{labels:ns.map(pad),datasets:[{label:'人數',data:ns.map(n=>x.cnt[n]||0),backgroundColor:GM[g].c}]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}},onClick:(e,el)=>{if(el.length){SEL.add(el[0].index+1);tray();}}}});
  if(x.mine)$('sdel').onclick=async()=>{if(!confirm('確定撤回本期分享？撤回後可重新分享。'))return;const r=await api('/api/share/'+g,{method:'DELETE',headers:{'X-CSRF':CSRF}});if(r&&r.ok)rShare(p);else $('smsg').textContent=(r&&r.error)||'撤回失敗';};
@@ -88,7 +88,7 @@ async function rShare(p){const g=D.g,x=await api('/api/share/'+g);const ns=nums(
 // ---- 6. 沙盤浮字 ----
 function rSand(p){p.innerHTML=`<div class="card2"><h3>🎲 沙盤浮字（娛樂用隨機選號）</h3><div id="sand"></div><div class="bar"><label>抽 <select id="sk">${[1,2,3,4,5,6].map(n=>`<option ${n===D.n?'selected':''}>${n}</option>`).join('')}</select> 個</label><button class="btn2" id="sshake">搖一搖</button><button class="btn2" id="spick">浮出號碼</button><span id="sres"></span></div></div>`;
  const box=$('sand'),ns=nums(D.max);box.innerHTML=ns.map(n=>`<span data-s="${n}">${n}</span>`).join('');const mv=()=>box.querySelectorAll('span').forEach(e=>{e.style.left=Math.random()*90+'%';e.style.top=Math.random()*85+'%';e.style.fontSize=(12+Math.random()*10)+'px';e.style.opacity=.35+Math.random()*.4;e.style.transform=`rotate(${Math.random()*60-30}deg)`;});mv();
- $('sshake').onclick=mv;$('spick').onclick=()=>{mv();const k=+$('sk').value,a=new Set();while(a.size<k)a.add(1+Math.floor(Math.random()*D.max));setTimeout(()=>{box.querySelectorAll('span').forEach(e=>{if(a.has(+e.dataset.s)){e.style.opacity=1;e.style.fontSize='34px';e.style.color='#fff';e.style.transform='none';}else e.style.opacity=.12;});
+ $('sshake').onclick=mv;$('spick').onclick=()=>{mv();const k=+$('sk').value,a=new Set();while(a.size<k)a.add(1+Math.floor(Math.random()*D.max));setTimeout(()=>{if(!box.isConnected||!$('sres'))return;box.querySelectorAll('span').forEach(e=>{if(a.has(+e.dataset.s)){e.style.opacity=1;e.style.fontSize='34px';e.style.color='#fff';e.style.transform='none';}else e.style.opacity=.12;});
   const x=[...a].sort((p,q)=>p-q);$('sres').innerHTML=x.map(n=>ball(n)).join('')+` <button class="btn2 g" id="suse">用這組</button>`;$('suse').onclick=()=>{SEL=new Set(x);tray();};tray();},1300);};}
 // ---- 7. 我的號碼 ----
 async function rMine(p){const x=await api('/api/mysets');const sets=[0,1].map(i=>x.sets[i]||{game:'539',name:'',nums:[]});
