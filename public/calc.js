@@ -51,7 +51,7 @@ function caBox(c,m){let b=document.getElementById('cabox');const d=document.getE
 function gameTheme(){const g=document.getElementById('game');document.documentElement.dataset.game=g?g.value:'539';}
 {const g=document.getElementById('game');if(g){g.addEventListener('change',gameTheme);}gameTheme();}
 // ---- 多遊戲面板（覆寫前面的 drawBox/caBox/mine/markMine）----
-const GAMES={'539':{name:'今彩539',cls:'g539',max:39,src:'台灣彩券'},lotto:{name:'大樂透',cls:'glo',max:49,sp:'特別號',src:'台灣彩券'},super:{name:'威力彩',cls:'gsu',max:38,sp:'第二區',src:'台灣彩券'},ca:{name:'加州天天樂',cls:'gca',max:39,src:'California Lottery'},hk:{name:'香港六合彩',cls:'ghk',max:49,sp:'特別號',src:'香港賽馬會'}};
+const GAMES={'539':{name:'今彩539',cls:'g539',max:39,src:'台灣彩券'},lotto:{name:'大樂透',cls:'glo',max:49,sp:'特別號',src:'台灣彩券'},super:{name:'威力彩',cls:'gsu',max:38,sp:'第二區',src:'台灣彩券'},ca:{name:'加州天天樂',cls:'gca',max:39,src:'California Lottery'},hk:{name:'香港六合彩',cls:'ghk',max:49,sp:'特別號',src:'香港賽馬會'},vn655:{name:'越南 Power 6/55',cls:'gvn',max:55,sp:'特別號',src:'Vietlott'},vn645:{name:'越南 Mega 6/45',cls:'gvn',max:45,src:'Vietlott'}};
 const curGame=()=>{const g=document.getElementById('game');return g?g.value:'539';};
 function gameData(k,d){d=d||DD||{};if(k==='539')return {latest:d.d539&&d.d539[0],hist:d.d539||[],updated:d.updated};if(k==='lotto')return {latest:d.lotto&&d.lotto[0],hist:d.lotto||[],updated:d.updated};if(k==='super')return {latest:d.super&&d.super[0],hist:d.super||[],updated:d.updated};const c=d[k];return c?{...c}:{hist:[]};}
 function mine(){const el=document.getElementById('mine');if(!el)return[];const mx=GAMES[curGame()].max;return [...new Set((el.value.match(/\d+/g)||[]).map(Number).filter(n=>n>=1&&n<=mx))];}
@@ -62,7 +62,7 @@ function panel(k,d,extra,note){const G=GAMES[k],x=gameData(k,d),L=x.latest;const
  const m=curGame()===k?mine():[],hit=L.nums.filter(n=>m.includes(n));
  b.innerHTML=`<span class="gb">${G.name}</span> <b>最新開獎</b>　第 ${L.period} 期　${L.date}<div>${balls(L.nums,hit,L.special)}${L.special!=null?`<span class="splabel">${G.sp}</span>`:''}</div>${extra||''}`+
  `<details><summary>近 ${x.hist.length} 期開獎</summary><table class="hist">${x.hist.map(h=>`<tr><td>${h.period}</td><td>${h.date}</td><td>${h.nums.map(pad).join(' ')}${h.special!=null?' ＋'+pad(h.special):''}</td></tr>`).join('')}</table></details>`+
- `<p class="note">${note?note+'｜':''}資料來源：${x.src==='lotteryusa'?'lotteryusa.com（官方 calottery 暫時無法連線，備援來源，請以官方網站為準）':x.src==='official'?'California Lottery 官方':G.src}${x.updated?'｜更新：'+new Date(x.updated).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'}):''}</p>`;}
+ `<p class="note">${note?note+'｜':''}資料來源：${x.src==='lotteryusa'?'lotteryusa.com（官方 calottery 暫時無法連線，備援來源，請以官方網站為準）':x.src==='official'?G.src+' 官方':x.src==='magayo'?'magayo.com（官方 vietlott.vn 擋連線，備援來源，請以官方網站為準）':G.src}${x.updated?'｜更新：'+new Date(x.updated).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'}):''}</p>`;}
 function drawBox(d){const old=document.getElementById('draws');if(!old)return;old.style.display='none';
  panel('539',d,'','每週一至六 20:30 開獎（全民i彩券直播）｜號碼以官方網站公布為準｜<a target="_blank" rel="noopener" href="https://www.taiwanlottery.com/" style="color:#fdba74">台灣彩券官網</a>');
  panel('lotto',d,'','每週二、五 20:30 開獎（同上直播）｜號碼以官方網站公布為準｜<a target="_blank" rel="noopener" href="https://www.taiwanlottery.com/" style="color:#fdba74">台灣彩券官網</a>');
@@ -71,6 +71,9 @@ function drawBox(d){const old=document.getElementById('draws');if(!old)return;ol
   '📺 開獎時間台北約 09:30（11/1 起約 10:30）｜號碼以官方網站公布為準｜<a target="_blank" rel="noopener" href="https://www.calottery.com/en/draw-games/fantasy-5" style="color:#60a5fa">加州彩券官網</a>（打不開可看<a target="_blank" rel="noopener" href="https://www.lotteryusa.com/california/fantasy-5/" style="color:#60a5fa">備援</a>）');
  const h=d.hk;panel('hk',d,h?`<p class="note">投注額 HK$${fmt(h.turnover)}${h.latest&&h.latest.snowball?'｜'+h.latest.snowball:''}</p><details><summary>派彩表</summary><table class="prz"><tr><th>獎項</th><th>中獎注數</th><th>每注派彩</th></tr>${(h.prizes||[]).map(p=>`<tr><td>${p.name}</td><td>${fmt(p.units)}</td><td>HK$${fmt(p.dividend)}</td></tr>`).join('')}</table></details>`:'',
   '📺 開獎：每週二、四、六或日 21:30（香港＝台北時間）｜號碼以官方網站公布為準｜<a target="_blank" rel="noopener" href="https://bet.hkjc.com/ch/marksix/results" style="color:#d8b4fe">馬會官方結果</a>');
+ const VL='｜號碼以官方網站公布為準｜<a target="_blank" rel="noopener" href="https://vietlott.vn/vi/trung-thuong/ket-qua-trung-thuong/winning-number-%s" style="color:#4ade80">Vietlott 官方結果</a>';
+ panel('vn655',d,'','📺 開獎：每週二、四、六 台北 19:00（越南 18:00）'+VL.replace('%s','655'));
+ panel('vn645',d,'','📺 開獎：每週三、五、日 台北 19:00（越南 18:00）'+VL.replace('%s','645'));
  const cb=document.getElementById('cabox');if(cb)cb.remove();
  LAST=gameData(curGame(),d).latest||null;}
 function caBox(){}

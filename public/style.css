@@ -50,3 +50,5 @@ html .secs>section.sec-draw{--c:#ea580c;--bg:#431407cc}
 html[data-game="lotto"] .secs>section.sec-draw{--c:#ca8a04;--bg:#422006cc}html[data-game="super"] .secs>section.sec-draw{--c:#be185d;--bg:#500724cc}
 html[data-game="ca"] .secs>section.sec-draw{--c:#1d4ed8;--bg:#172554cc}html[data-game="hk"] .secs>section.sec-draw{--c:#7e22ce;--bg:#3b0764cc}
 html.lay-d .secs{gap:0 16px}
+.gvn{border:1px solid #22c55e!important;border-left:6px solid #15803d!important;background:linear-gradient(90deg,#052e16aa,transparent 60%)}
+.gvn .gb{background:#16a34a}.gvn .ball{background:#4ade80;color:#052e16}.gvn .ball.sp{background:#facc15;color:#1c1400}.gvn .hist td{border-color:#14532d}.gvn summary{color:#86efac}

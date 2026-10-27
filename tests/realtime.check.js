@@ -18,7 +18,7 @@ t('版本號隨新一期改變',()=>assert.notEqual(SC.verOf(tw('a','b','c')),SC
 (async()=>{const DR=require('../draws');let calls=0,fired=0;
  DR._setCache({...tw('2026-10-26','2026-10-23','2026-10-26')});
  DR._run.tw=async()=>{calls++;if(calls>=2)DR._setCache({...tw('2026-10-27','2026-10-27','2026-10-26'),d539:[{period:'115000256',date:'2026-10-27'}],lotto:[{period:'115000099',date:'2026-10-27'}]});};
- DR._run.ca=DR._run.hk=async()=>{};DR.onNew(()=>fired++);
+ DR._run.ca=DR._run.hk=DR._run.vn=async()=>{};DR.onNew(()=>fired++);
  const base=at('2026-10-27T20:50:00+08:00');await DR.fast(base);DR.ver();
  // 第一次呼叫時建立基準版本
  assert.equal(fired,0);await DR.fast(base+60e3);assert.equal(calls,2);assert.equal(fired,1,'新一期要觸發通知');
