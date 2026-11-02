@@ -19,14 +19,14 @@ function parse(r,html,date){const R=REG[r];const i=html.indexOf(`id="${R.id}"`);
  const [y,m,d]=date.split('-');if(!t.includes(`${d}-${m}-${y}`)&&!t.includes(`${d}/${m}`))return [];
  const rows=[...t.matchAll(/<tr>([\s\S]*?)<\/tr>/g)].map(x=>x[1]);const out=[];
  if(r==='vnmb'){const pm=t.match(/\(([^)<]+)\)<\/b>/);const P={};for(const row of rows){const tds=[...row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(x=>x[1]);if(tds.length<2)continue;const k=lab(tds[0]);if(!k)continue;P[k]=(strip(tds[1]).match(/\d+/g)||[]);}
-  if(okPrizes(r,P))out.push({region:r,date,prov:'Miền Bắc'+(pm?' ('+pm[1].trim()+')':''),prizes:P,src:'xskt'});return out;}
+  if(okPrizes(r,P))out.push({region:r,date,prov:'Miền Bắc'+(pm?' ('+pm[1].trim()+')':''),prizes:P,src:'xskt'});out.expected=1;return out;}
  const head=rows[0]||'';const provs=[...head.matchAll(/<th>\s*<a[^>]*>([^<]+)<\/a>/g)].map(x=>x[1].trim()).filter(x=>!/^Thứ|^Chủ/i.test(x));
  const P=provs.map(()=>({}));for(const row of rows.slice(1)){const tds=[...row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(x=>x[1]);const k=lab(tds[0]||'');if(!k)continue;tds.slice(1).forEach((c,j)=>{if(P[j])P[j][k]=strip(c.replace(/<br\s*\/?>/g,' ')).match(/\d+/g)||[];});}
- provs.forEach((p,j)=>{if(okPrizes(r,P[j]))out.push({region:r,date,prov:p,prizes:P[j],src:'xskt'});});return out;}
+ provs.forEach((p,j)=>{if(okPrizes(r,P[j]))out.push({region:r,date,prov:p,prizes:P[j],src:'xskt'});});out.expected=provs.length;return out;}
 exports.parse=parse;
 const fmtD=d=>{const [y,m,dd]=d.split('-');return `${+dd}-${+m}-${y}`;};
 exports.url=(r,date)=>`https://xskt.com.vn/${REG[r].path}/ngay-${fmtD(date)}`;
-async function fetchDay(r,date){const res=await fetch(exports.url(r,date),{headers:{'User-Agent':UA,Accept:'text/html'},signal:AbortSignal.timeout(20000)});if(!res.ok)throw new Error('xskt HTTP '+res.status);return parse(r,await res.text(),date);}
+async function fetchDay(r,date){if(!Object.hasOwn(REG,r))throw new Error('bad region');const res=await fetch(exports.url(r,date),{headers:{'User-Agent':UA,Accept:'text/html'},signal:AbortSignal.timeout(20000)});if(!res.ok)throw new Error('xskt HTTP '+res.status);const out=parse(r,await res.text(),date);if(out.expected)EXP.set(r+date,out.expected);return out;}
 exports.fetchDay=fetchDay;
 // 儲存：Postgres vnprov 表；沒有資料庫時只放記憶體
 let mem={vnmb:[],vnmt:[],vnmn:[]},ver=0;const pool=()=>S.pg();
@@ -35,14 +35,20 @@ async function load(){if(!pool())return;const q=await pool().query("SELECT regio
 async function put(rows){let n=0;if(!rows.length)return 0;if(!pool()){for(const x of rows){const a=mem[x.region];if(!a.some(y=>y.date===x.date&&y.prov===x.prov)){a.push({date:x.date,prov:x.prov,prizes:x.prizes,src:x.src});n++;}a.sort((p,q)=>p.date<q.date?-1:p.date>q.date?1:p.prov<q.prov?-1:1);}if(n)ver++;return n;}
  for(const x of rows)n+=(await pool().query('INSERT INTO vnprov(region,ddate,prov,prizes,src) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING',[x.region,x.date,x.prov,JSON.stringify(x.prizes),x.src])).rowCount;if(n)await load();return n;}
 const tpe=()=>new Date(Date.now()+8*3600e3);const dstr=d=>d.toISOString().slice(0,10);
-const has=(r,date)=>mem[r].some(x=>x.date===date);
+// 逐省判斷是否齊全：一天裡只要有一省還沒收（例如直播中先開完的省先寫入），那天就要再抓
+// 應有省數：抓頁時記下頁面上的省數；沒有紀錄（重啟後）就用同一個星期幾出現過的最多省數
+const EXP=new Map();
+const dow=d=>new Date(d+'T00:00:00Z').getUTCDay();
+function expected(r,date){if(EXP.has(r+date))return EXP.get(r+date);if(r==='vnmb')return 1;const w=dow(date),c=new Map();for(const x of mem[r])if(dow(x.date)===w)c.set(x.date,(c.get(x.date)||0)+1);return Math.max(1,...c.values());}
+const has=(r,date)=>mem[r].filter(x=>x.date===date).length>=expected(r,date);
+exports._has=has;exports._mem=()=>mem;
 // 補歷史：每區最近 DAYS 天，缺哪天補哪天；每次請求間隔 1.2 秒，在背景跑，不擋網頁
 const DAYS=+process.env.VNPROV_DAYS||120;let busy=false;
 async function backfill(){if(busy)return;busy=true;let n=0;try{for(let i=1;i<=DAYS;i++){const date=dstr(new Date(tpe().getTime()-i*864e5));for(const r of Object.keys(REG)){if(has(r,date))continue;try{n+=await put(await fetchDay(r,date));}catch(e){console.error('vnprov',r,date,e.message);}await sleep(1200);}}}finally{busy=false;console.log('vnprov backfill done +',n);}}
 // 今天：開獎時段（台北 17:10–20:00）每分鐘查，其餘每 30 分鐘
-async function today(){const date=dstr(tpe());let n=0;for(const r of Object.keys(REG)){if(has(r,date))continue;try{n+=await put(await fetchDay(r,date));}catch(e){}await sleep(500);}if(n)console.log('vnprov today +',n);return n;}
+async function today(){let n=0;for(const date of [dstr(tpe()),dstr(new Date(tpe().getTime()-864e5))])for(const r of Object.keys(REG)){if(has(r,date))continue;try{n+=await put(await fetchDay(r,date));}catch(e){}await sleep(500);}if(n)console.log('vnprov today +',n);return n;}
 exports.start=async()=>{try{await init();}catch(e){console.error('vnprov init',e.message);}setTimeout(()=>today().then(()=>backfill()).catch(e=>console.error('vnprov',e.message)),8000);
  setInterval(()=>{const d=tpe(),hm=d.getUTCHours()*60+d.getUTCMinutes();if((hm>=17*60+10&&hm<=20*60)||d.getUTCMinutes()%30===0)today();},60e3);setInterval(backfill,12*3600e3);};
 exports.ver=()=>ver;
-exports.data=(r,days)=>{const a=mem[r]||[];if(!days)return a;const ds=[...new Set(a.map(x=>x.date))].slice(-days);const s=new Set(ds);return a.filter(x=>s.has(x.date));};
+exports.data=(r,days)=>{const a=Object.hasOwn(mem,r)?mem[r]:[];if(!days)return a;const ds=[...new Set(a.map(x=>x.date))].slice(-days);const s=new Set(ds);return a.filter(x=>s.has(x.date));};
 exports.latest=()=>Object.fromEntries(Object.keys(REG).map(r=>{const a=mem[r];const d=a.length?a[a.length-1].date:null;return [r,{name:REG[r].name,date:d,rows:a.filter(x=>x.date===d),url:'https://xskt.com.vn/'+REG[r].path}];}));

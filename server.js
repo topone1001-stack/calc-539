@@ -87,7 +87,7 @@ app.get('/stats',auth,(q,s)=>s.sendFile(P('stats.html')));
 app.get('/stats.js',auth,(q,s)=>s.sendFile(P('stats.js')));
 app.get('/api/hist/:g',auth,can('hist','stats','adv','share','fun'),(q,s)=>{const g=q.params.g;if(!GK.includes(g))return s.status(404).end();const d={...HI.data(g),importing:HI.importing()};const tag='"'+g+'-'+d.total+'-'+(d.last||'')+'-'+(d.ordN||0)+'-'+d.importing+'"';if(q.get('If-None-Match')===tag)return s.status(304).end();s.set({ETag:tag,'Cache-Control':'private, no-cache'}).json(d);});
 app.get('/api/vnprov-latest',auth,(q,s)=>s.set('Cache-Control','no-store').json(VP.latest()));
-app.get('/api/vnprov/:r',auth,can('hist','stats','adv','share','fun'),(q,s)=>{const r=q.params.r;if(!VP.REG[r])return s.status(404).end();s.set('Cache-Control','no-store').json({r,name:VP.REG[r].name,url:'https://xskt.com.vn/'+VP.REG[r].path,rows:VP.data(r,0)});});
+app.get('/api/vnprov/:r',auth,can('hist','stats','adv','share','fun'),(q,s)=>{const r=q.params.r;if(!Object.hasOwn(VP.REG,r))return s.status(404).end();s.set('Cache-Control','no-store').json({r,name:VP.REG[r].name,url:'https://xskt.com.vn/'+VP.REG[r].path,rows:VP.data(r,0)});});
 app.get('/api/hist-status',auth,admin,(q,s)=>s.json({...HI.status(),counts:Object.fromEntries(GK.map(g=>[g,HI.data(g).total]))}));
 app.get('/api/csrf',auth,(q,s)=>s.json({csrf:csrf(q)}));
 app.get('/api/mysets',auth,can('mynum'),(q,s)=>s.json({sets:q.u.sets}));
