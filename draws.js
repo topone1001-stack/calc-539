@@ -44,12 +44,26 @@ function tickCA(){const d=tpe(),hm=d.getUTCHours()*60+d.getUTCMinutes();if((hm>=
 // 香港六合彩：HKJC 官方 GraphQL（查詢字串須與官網完全一致，存在 hk-query.graphql）
 const HKQ=require('fs').readFileSync(require('path').join(__dirname,'hk-query.graphql'),'utf8');let hkLast=0;
 const HKP=['頭獎','二獎','三獎','四獎','五獎','六獎','七獎'];
-async function refreshHK(){hkLast=Date.now();try{const r=await fetch('https://info.cld.hkjc.com/graphql/base/',{method:'POST',headers:{'Content-Type':'application/json','User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36','Origin':'https://bet.hkjc.com','Referer':'https://bet.hkjc.com/'},body:JSON.stringify({operationName:'marksixResult',variables:{lastNDraw:20,drawType:'All'},query:HKQ}),signal:AbortSignal.timeout(20000)});
- const j=await r.json();const d=(j.data&&j.data.lotteryDraws)||[];if(!d.length)throw new Error(JSON.stringify(j.errors||'empty'));
+// 備援：HKJC 從 Render 回 HTML（疑似擋機房 IP）時，改用 biga 歷史表（非官方，標示備援）
+function parseBiga(t){const out=[];for(const r of t.matchAll(/<td>(\d{4})\/(\d{2})\/(\d{2})<\/td><td>[^<]*<\/td><td>(\d{2})\/(\d{3})<\/td>(?:<td>[^<]*<\/td>){3}((?:<td>\d{1,2}<\/td>){7})/g)){const n=(r[6].match(/\d+/g)||[]).map(Number);const o=n.slice(0,6);
+ if(new Set(n).size!==7||!n.every(x=>x>=1&&x<=49))continue;out.push({period:'20'+r[4]+'/'+r[5],date:r[1]+'-'+r[2]+'-'+r[3],nums:o.slice().sort((a,b)=>a-b),special:n[6],order:o,src:'biga'});}
+ return out.sort((a,b)=>a.period<b.period?1:-1);}
+exports._parseBiga=parseBiga;
+async function refreshHKBiga(why){const r=await fetch(HKORD,{headers:{'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36'},signal:AbortSignal.timeout(20000)});if(!r.ok)throw new Error('biga HTTP '+r.status);
+ const hist=parseBiga(await r.text()).slice(0,20);if(!hist.length)throw new Error('biga parse: 0 rows');const prev=cache.hk||{};
+ if(prev.latest&&prev.latest.period>hist[0].period)throw new Error('biga older than cache');
+ const same=prev.latest&&prev.latest.period===hist[0].period&&prev.src!=='biga';// 已有官方同期：保留官方獎金資料
+ cache.hk={updated:new Date().toISOString(),src:'biga',latest:hist[0],hist,turnover:same?prev.turnover:undefined,jackpotCarry:same?prev.jackpotCarry:undefined,prizes:same?prev.prizes:[],officialErr:why};
+ if(same){cache.hk.src='official';cache.hk.latest=prev.latest;cache.hk.hist=prev.hist;}save();console.log('hk updated via biga',hist[0].period,'(hkjc:',why+')');}
+async function refreshHK(){hkLast=Date.now();try{await refreshHKOfficial();}catch(e){console.error('hk fetch failed:',e.message);try{await refreshHKBiga(e.message.slice(0,80));}catch(e2){console.error('hk biga failed:',e2.message);}}}
+async function refreshHKOfficial(){{const r=await fetch('https://info.cld.hkjc.com/graphql/base/',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json','Accept-Language':'zh-HK,zh;q=0.9,en;q=0.8','User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36','Origin':'https://bet.hkjc.com','Referer':'https://bet.hkjc.com/'},body:JSON.stringify({operationName:'marksixResult',variables:{lastNDraw:20,drawType:'All'},query:HKQ}),signal:AbortSignal.timeout(20000)});
+ const ct=r.headers.get('content-type')||'';if(!r.ok||!/json/.test(ct))throw new Error('hkjc HTTP '+r.status+' '+ct.split(';')[0]);const j=await r.json();const d=(j.data&&j.data.lotteryDraws)||[];if(!d.length)throw new Error(JSON.stringify(j.errors||'empty'));
  const hist=d.filter(x=>x.drawResult&&x.drawResult.drawnNo&&x.drawResult.drawnNo.length===6).map(x=>({period:x.year+'/'+String(x.no).padStart(3,'0'),date:x.drawDate.slice(0,10),nums:x.drawResult.drawnNo.slice().sort((a,b)=>a-b),special:x.drawResult.xDrawnNo,snowball:x.snowballName_ch||''}));
  await hkOrder(hist,(cache.hk&&cache.hk.hist)||[]);
  const L=d.find(x=>x.drawResult&&x.drawResult.drawnNo&&x.drawResult.drawnNo.length===6),pool=L&&L.lotteryPool||{};
- cache.hk={updated:new Date().toISOString(),latest:hist[0],hist:hist.slice(0,20),turnover:pool.totalInvestment,jackpotCarry:pool.jackpot,prizes:(pool.lotteryPrizes||[]).map(p=>({name:HKP[p.type-1]||('第'+p.type+'獎'),units:p.winningUnit,dividend:p.dividend}))};save();console.log('hk updated',hist[0]&&hist[0].period);}catch(e){console.error('hk fetch failed:',e.message);}}
+ cache.hk={updated:new Date().toISOString(),latest:hist[0],hist:hist.slice(0,20),turnover:pool.totalInvestment,jackpotCarry:pool.jackpot,prizes:(pool.lotteryPrizes||[]).map(p=>({name:HKP[p.type-1]||('第'+p.type+'獎'),units:p.winningUnit,dividend:p.dividend}))};
+ if(hist[0]&&hist[0].order)console.log('hk cross-check biga OK',hist[0].period);else console.log('hk cross-check biga: no match for',hist[0]&&hist[0].period);
+ save();console.log('hk updated',hist[0]&&hist[0].period);}}
 // 六合彩落球順序：HKJC API 只給排序後號碼，改從台灣的彩六軟體線上（biga）歷史表取「落球順序」；
 // 只有在排序後跟 HKJC 官方號碼和特別號完全一致時才採用，不一致就不顯示（不自己編）
 const HKORD='https://mark6online.biga.com.tw/6/MARK6/%E5%AF%A6%E7%94%A8%E7%B5%B1%E8%A8%88%EF%BC%8D%E6%AD%B7%E5%8F%B2%E9%96%8B%E7%8D%8E%E8%99%9F%E7%A2%BC.php';
