@@ -1,5 +1,5 @@
 const express=require('express'),session=require('express-session'),bcrypt=require('bcryptjs'),rateLimit=require('express-rate-limit'),crypto=require('crypto'),fs=require('fs'),path=require('path'),U=require('./users');
-const DR=require('./draws'),S=require('./store'),HI=require('./hist');const VP=require('./vnprov');
+const DR=require('./draws'),S=require('./store'),HI=require('./hist');const VP=require('./vnprov');const FT=require('./features');
 (async()=>{await S.init();if(!S.get('users')){try{const f=require('path').join(__dirname,'users.json');if(require('fs').existsSync(f)){await S.set('users',JSON.parse(require('fs').readFileSync(f,'utf8')));console.log('users imported from file');}}catch(e){}}DR.start();HI.start().catch(e=>console.error('hist',e.message));VP.start().catch(e=>console.error('vnprov',e.message));
 const app=express();app.set('trust proxy',1);app.disable('x-powered-by');
 const helmet=require('helmet');
@@ -23,7 +23,7 @@ const usable=u=>u&&u.enabled&&(!u.expires||u.expires>=today());
 const susp=(q,act,detail)=>{try{const L=S.get('oplog')||[];L.unshift({t:new Date().toISOString(),by:(q.session&&q.session.user)||'(未登入)',act:'⚠️ '+act,target:'',detail:String(detail||'').slice(0,120),ip:q.ip});S.set('oplog',L.slice(0,1000)).catch(()=>{});}catch(e){}};
 const VALID=n=>typeof n==='string'&&/^[A-Za-z0-9_.\-]{3,32}$/.test(n);
 const getU=n=>{if(!VALID(n))return null;const us=U.load();if(!Object.prototype.hasOwnProperty.call(us,n))return null;const r=us[n];return r&&r.hash?norm(n,r):null;};
-const auth=(q,s,n)=>{const us=U.load(),nm=q.session.user;if(!nm||!us[nm])return q.session.destroy(()=>s.redirect('/login'));if(stale(us[nm]))return q.session.destroy(()=>q.path.startsWith('/api/')?s.status(401).json({error:'帳號已停用，請聯絡上線重設'}):s.redirect('/login?e=stale'));const e=eff(us,nm);if(!e.ok)return q.session.destroy(()=>s.redirect('/login'));q.u=e;if(us[nm].mustChange&&!q.skipMC)return q.path.startsWith('/api/')?s.status(403).json({error:'請先修改密碼'}):s.redirect('/password');n();};
+const auth=(q,s,n)=>{const us=U.load(),nm=q.session.user;if(!nm||!us[nm])return q.session.destroy(()=>s.redirect('/login'));if(stale(us[nm]))return q.session.destroy(()=>q.path.startsWith('/api/')?s.status(401).json({error:'帳號已停用，請聯絡上線重設'}):s.redirect('/login?e=stale'));const e=eff(us,nm);if(!e.ok)return q.session.destroy(()=>s.redirect('/login'));q.u={...e,perms:FT.perms(e.perms)};if(us[nm].mustChange&&!q.skipMC)return q.path.startsWith('/api/')?s.status(403).json({error:'請先修改密碼'}):s.redirect('/password');n();};
 const DEFPW='12345678';
 // 預設密碼 24 小時內沒改就停用（舊帳號沒有 pwSetAt 不受影響）；重設會重新計時
 const STALE_MS=+process.env.STALE_MS_OVERRIDE||24*3600e3;const stale=r=>!!(r&&r.mustChange&&r.pwSetAt&&Date.now()-Date.parse(r.pwSetAt)>STALE_MS);
@@ -72,11 +72,12 @@ const DRAWBOX='<details id="live" class="drawbox" open><summary><b>📺 開獎�
 const CALC=fs.readFileSync(P('calc.html'),'utf8');
 app.get('/',auth,(q,s)=>{const i=CALC.indexOf('<h2>'),e=CALC.lastIndexOf('</div></div><script');const parts=CALC.slice(i,e).split(/(?=<h2>)/);
  let body=parts.map((p,k)=>q.u.perms.includes(ALL[k])?'<section class="sec sec-'+ALL[k]+'">'+p+'</section>':'').join('');body=body&&'<div class="secs">'+body+'</div>';if(!body)body='<p>此帳號尚未開通任何功能，請聯絡管理員。</p>';
- s.type('html').send(CALC.slice(0,i)+'<div class="tops">'+DRAWBOX+'</div>'+body+CALC.slice(e));});
+ const fo=FT.off();const dbx=fo.has('live')?DRAWBOX.replace(/<details id="live"[\s\S]*?<\/details>/,''):DRAWBOX;
+ s.set('Cache-Control','no-store').type('html').send(CALC.slice(0,i).replace('<script src="/layout.js"></script>','<script src="/layout.js"></script><script>window.FEAT_OFF='+JSON.stringify([...fo])+'</script>')+'<div class="tops">'+dbx+'</div>'+body+CALC.slice(e));});
 app.get('/calc.js',auth,(q,s)=>s.sendFile(P('calc.js')));
-app.get('/draws',auth,(q,s)=>s.set('Cache-Control','no-store').json(DR.get()));
+app.get('/draws',auth,(q,s)=>s.set('Cache-Control','no-store').json(FT.draws(DR.get())));
 // 很小的「有沒有新開獎」查詢：網頁每 15–60 秒問一次，版本變了才重抓 /draws。live＝現在有彩種在等開獎結果
-app.get('/api/draws-ver',auth,(q,s)=>s.set('Cache-Control','no-store').json({v:DR.ver(),live:DR.live()}));
+app.get('/api/draws-ver',auth,(q,s)=>FT.on('auto')?s.set('Cache-Control','no-store').json({v:DR.ver(),live:DR.live()}):s.status(404).set('Cache-Control','no-store').json({off:true}));
 DR.onNew(()=>HI.syncRecent().catch(e=>console.error('sync after new draw',e.message)));
 
 // ---- 統計／歷史 API ----
@@ -85,9 +86,9 @@ const jchk=(q,s,n)=>{const t=q.get('X-CSRF')||'',r=q.session.csrf||'';if(r&&t.le
 const GK=['539','lotto','super','ca','hk','vn655','vn645','vn535'];
 app.get('/stats',auth,(q,s)=>s.sendFile(P('stats.html')));
 app.get('/stats.js',auth,(q,s)=>s.sendFile(P('stats.js')));
-app.get('/api/hist/:g',auth,can('hist','stats','adv','share','fun'),(q,s)=>{const g=q.params.g;if(!GK.includes(g))return s.status(404).end();const d={...HI.data(g),importing:HI.importing()};const tag='"'+g+'-'+d.total+'-'+(d.last||'')+'-'+(d.ordN||0)+'-'+d.importing+'"';if(q.get('If-None-Match')===tag)return s.status(304).end();s.set({ETag:tag,'Cache-Control':'private, no-cache'}).json(d);});
-app.get('/api/vnprov-latest',auth,(q,s)=>s.set('Cache-Control','no-store').json(VP.latest()));
-app.get('/api/vnprov/:r',auth,can('hist','stats','adv','share','fun'),(q,s)=>{const r=q.params.r;if(!Object.hasOwn(VP.REG,r))return s.status(404).end();s.set('Cache-Control','no-store').json({r,name:VP.REG[r].name,url:'https://xskt.com.vn/'+VP.REG[r].path,rows:VP.data(r,0)});});
+app.get('/api/hist/:g',auth,can('hist','stats','adv','share','fun'),(q,s)=>{const g=q.params.g;if(!GK.includes(g)||!FT.gameOn(g)||!FT.histOn())return s.status(404).set('Cache-Control','no-store').end();const d=FT.hist({...HI.data(g),importing:HI.importing()});const tag='"f'+FT.ver()+'-'+[...FT.off()].join('.')+'-'+g+'-'+d.total+'-'+(d.last||'')+'-'+(d.ordN||0)+'-'+d.importing+'"';if(q.get('If-None-Match')===tag)return s.status(304).end();s.set({ETag:tag,'Cache-Control':'private, no-cache'}).json(d);});
+app.get('/api/vnprov-latest',auth,(q,s)=>{const o=FT.off(),L=VP.latest();for(const r of Object.keys(L))if(o.has('g_'+r))delete L[r];s.set('Cache-Control','no-store').json(L);});
+app.get('/api/vnprov/:r',auth,can('hist','stats','adv','share','fun'),(q,s)=>{const r=q.params.r;if(!Object.hasOwn(VP.REG,r)||!FT.gameOn(r)||!FT.histOn())return s.status(404).end();s.set('Cache-Control','no-store').json({r,name:VP.REG[r].name,url:'https://xskt.com.vn/'+VP.REG[r].path,rows:VP.data(r,0)});});
 app.get('/api/hist-status',auth,admin,(q,s)=>s.json({...HI.status(),counts:Object.fromEntries(GK.map(g=>[g,HI.data(g).total]))}));
 app.get('/api/csrf',auth,(q,s)=>s.json({csrf:csrf(q)}));
 app.get('/api/mysets',auth,can('mynum'),(q,s)=>s.json({sets:q.u.sets}));
@@ -102,7 +103,7 @@ app.get('/api/share/:g',auth,can('share'),(q,s)=>{const g=q.params.g;if(!GK.incl
 app.post('/api/share/:g',auth,can('share'),jchk,(q,s)=>{const g=q.params.g;if(!GK.includes(g))return s.status(404).end();const mx=HI.data(g).max||49;const nums=[...new Set((q.body.nums||[]).map(Number).filter(n=>n>=1&&n<=mx))].slice(0,10);if(!nums.length)return s.status(400).json({error:'請選號碼'});
  const sh=S.get('shares')||{},k=nextKey(g);sh[g]=sh[g]||{};for(const kk of Object.keys(sh[g]))if(kk!==k)delete sh[g][kk];sh[g][k]=sh[g][k]||{};if(sh[g][k][q.session.user])return s.status(409).json({error:'本期已分享過'});
  sh[g][k][q.session.user]=nums;S.set('shares',sh);oplog(q,'熱門分享',q.session.user,g+' '+k+'：'+nums.join(' '));s.json({ok:true});});
-app.get('/api/other',auth,can('other'),(q,s)=>s.json(DR.get().other||{}));
+app.get('/api/other',auth,can('other'),(q,s)=>FT.on('t_other')?s.json(DR.get().other||{}):s.status(404).json({error:'此功能已關閉'}));
 
 // ---- 外部排程喚醒（GitHub Actions）：帶 X-Cron-Token 呼叫 ----
 let cronLast=null;
@@ -111,7 +112,7 @@ app.all('/cron',async(q,s)=>{const tk=process.env.CRON_TOKEN||'',got=q.get('X-Cr
  const st=S.get('cronlog')||[];st.unshift(cronLast);S.set('cronlog',st.slice(0,50)).catch(()=>{});s.json({ok:true,...cronLast,counts:Object.fromEntries(GK.map(g=>[g,HI.data(g).total]))});});
 app.get('/api/draw-seen',auth,admin,(q,s)=>s.set('Cache-Control','no-store').json(S.get('drawSeen')||[]));
 app.get('/api/cron-log',auth,admin,(q,s)=>s.json(S.get('cronlog')||[]));
-app.get('/me',auth,(q,s)=>s.json({user:q.session.user,role:q.u.role,perms:q.u.perms,sets:q.u.perms.includes('mynum')?q.u.sets:[]}));
+app.get('/me',auth,(q,s)=>s.set('Cache-Control','no-store').json({user:q.session.user,role:q.u.role,perms:q.u.perms,off:[...FT.off()],sets:q.u.perms.includes('mynum')?q.u.sets:[]}));
 // ---- 後台：管理員／代理（多層）----
 const ROLES={admin:'管理員',agent:'代理',user:'會員'};
 const parentOf=(us,n)=>us[n]&&us[n].parent||'';
@@ -156,7 +157,7 @@ const page=(q,msg,created)=>{const t=csrf(q),us=U.load(),me=q.session.user,isA=q
 body{display:block}.wrap{display:block;max-width:980px;margin:0 auto;padding:12px}.u{border:1px solid #334155;border-radius:10px;padding:8px 10px;margin:8px 0;background:#0f172a99}.h{margin-bottom:4px}.b{font-size:12px;padding:2px 8px;border-radius:9px;background:#334155}.on{background:#166534}.off{background:#991b1b}
 form{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0}.row{display:flex;flex-wrap:wrap;gap:6px}.ck{display:flex;gap:4px;align-items:center;margin:0;white-space:nowrap}.ck input[type=checkbox]{width:auto;margin:0}input,select{margin:0;padding:7px;width:auto}button{padding:7px 12px;border-radius:7px;border:0;background:#2563eb;color:#fff;cursor:pointer}.del{background:#b91c1c}.msg{background:#1e3a8a;padding:8px;border-radius:8px}.note{color:#94a3b8;font-size:12px}a{color:#60a5fa}summary{cursor:pointer;color:#93c5fd;font-size:13px;margin:4px 0}
 .box{border:1px solid #334155;border-radius:10px;padding:10px;margin:10px 0}table{width:100%;border-collapse:collapse}td,th{border:1px solid #334155;padding:4px;font-size:12px}</style></head><body><div class="wrap">
-<p><a href="/">← 回計算器</a>｜<a href="/password">修改我的密碼</a></p><h1>${isA?'管理後台':'代理後台'}</h1><p class="note">登入身分：${esc(me)}（${ROLES[q.u.role]}）${isA?'':'｜只能建立與管理自己的會員；權限與到期日不可超過自己'}</p>${msg?`<p class="msg">${esc(msg)}</p>`:''}
+<p><a href="/">← 回計算器</a>｜<a href="/password">修改我的密碼</a>${isA?'｜<a href="/admin/features">⚙️ 功能開關</a>':''}</p><h1>${isA?'管理後台':'代理後台'}</h1><p class="note">登入身分：${esc(me)}（${ROLES[q.u.role]}）${isA?'':'｜只能建立與管理自己的會員；權限與到期日不可超過自己'}</p>${msg?`<p class="msg">${esc(msg)}</p>`:''}
 <div class="box"><h2>新增帳號</h2>${F('create',`<input name="username" id="newu" value="${genName(us,'user')}" placeholder="帳號" required pattern="[A-Za-z0-9_.\\-]{3,32}" autocomplete="off"><button type="button" id="regen">換一個</button><input name="note" maxlength="200" placeholder="備註（選填，可自己打）" autocomplete="off" style="min-width:200px"><span class="note">預設密碼 12345678，首次登入須修改</span>
  ${isA?sel('role',[['user','會員'],['agent','代理'],['admin','管理員']],'user')+`<label class="ck">上線${sel('parent',[['','（無，直屬管理員）'],...agents.map(a=>[a,a])],'')}</label>`:'<input type="hidden" name="role" value="user"><span class="note">建立會員（上線＝自己）</span>'}
  <label class="ck">到期<input type="date" name="expires"${!isA&&myEff.effExpires?` max="${myEff.effExpires}" value="${myEff.effExpires}"`:''}></label>`+FEATS.filter(([k])=>capPerms.includes(k)).map(([k,l])=>`<label class="ck"><input type="checkbox" name="perms" value="${k}" checked>${l}</label>`).join('')+'<button>新增</button>')}${created?`<div id="newacct" style="border:1px solid #d4af37;background:#2a1f0c;border-radius:10px;padding:10px;margin-top:10px"><b>✅ 帳號已建立</b><div id="cptxt" style="font-size:18px;margin:6px 0;user-select:all;white-space:pre-line">網址：https://calc-539.onrender.com
@@ -201,6 +202,12 @@ A('perms',(q,us,n)=>{const isA=q.u.role==='admin';const u=norm(n,us[n]);let role
  if(u.role==='agent'&&role==='user'&&direct(us,n).length)return '此代理還有下線，不能改成會員';if(u.role==='admin'&&role!=='admin'&&lastAdmin(us,n))return '至少要保留一位管理員';
  const L=limits(q,us,us[n].parent);const perms=arr(q.body.perms).filter(k=>L.perms.includes(k)||!isA&&false);const exp=clampExp(date(q.body.expires),L.exp);
  us[n]={...us[n],role,perms,expires:exp,...(role==='admin'?{parent:''}:{})};return `✓ 已更新 ${n}：${ROLES[role]}，到期 ${exp||'無'}，權限 ${perms.length} 項`;});
+// ---- 功能開關（只有管理員）----
+const featPage=(q,msg)=>{const o=FT.off(),t=csrf(q);return `<!doctype html><html lang="zh-TW"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>功能開關</title><link rel="stylesheet" href="/style.css"><script src="/layout.js"></script><style>body{display:block}.wrap{max-width:820px;margin:0 auto;padding:12px}.box{border:1px solid #334155;border-radius:10px;padding:10px;margin:10px 0}.ck{display:flex;gap:8px;align-items:center;min-height:44px;margin:0}.ck input{width:22px;height:22px;margin:0}.gr{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px}.msg{background:#1e3a8a;padding:8px;border-radius:8px}button{padding:10px 16px;border-radius:8px;border:0;background:#2563eb;color:#fff;cursor:pointer;min-height:44px}.note{color:#94a3b8;font-size:12px}a{color:#60a5fa}</style></head><body><div class="wrap"><p><a href="/admin">← 回管理後台</a>｜<a href="/">回計算器</a></p><h1>功能開關</h1><p class="note">全站設定，對所有帳號（含管理員）生效。打勾＝開啟；關閉的功能畫面不顯示、API 也不回資料。預設全部開啟。</p>${msg?`<p class="msg">${esc(msg)}</p>`:''}
+<form method="post" action="/admin/features"><input type="hidden" name="_csrf" value="${t}">${FT.GROUPS.map(([g,items])=>`<div class="box"><h2>${esc(g)}</h2><div class="gr">${items.map(([k,l])=>`<label class="ck"><input type="checkbox" name="on" value="${k}" ${o.has(k)?'':'checked'}>${esc(l)}</label>`).join('')}</div></div>`).join('')}<button>儲存開關</button></form></div></body></html>`;};
+app.get('/admin/features',auth,admin,(q,s)=>{const m=q.session.flash;delete q.session.flash;s.set('Cache-Control','no-store').type('html').send(featPage(q,m));});
+app.post('/admin/features',auth,admin,chk,async(q,s)=>{const onL=arr2(q.body.on);const off=FT.KEYS.filter(k=>!onL.includes(k));try{await FT.save(off);}catch(e){q.session.flash='儲存失敗，請再試一次';return s.redirect('/admin/features');}oplog(q,'修改功能開關','',off.length?'關閉：'+off.join(','):'全部開啟');q.session.flash='✓ 已儲存'+(off.length?`（關閉 ${off.length} 項）`:'（全部開啟）');s.redirect('/admin/features');});
+const arr2=x=>(Array.isArray(x)?x:x?[x]:[]).map(String);
 app.use((q,s)=>s.status(404).type('text').send('404'));
 app.use((e,q,s,n)=>{console.error('ERR',q.method,q.path,e&&e.message);s.status(e&&e.status&&e.status<500?e.status:500).type('text').send(e&&e.type==='entity.too.large'?'413 內容太大':'發生錯誤，請稍後再試');});
 const port=process.env.PORT||3080;app.listen(port,()=>console.log('listening',port));

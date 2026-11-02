@@ -26,7 +26,7 @@ function markMine(){const el=document.getElementById('mine'),out=document.getEle
  const hit=LAST.nums.filter(n=>m.includes(n));out.textContent=`對照${(document.getElementById("game")||{}).value==="ca"?"加州天天樂":"539"} 第 ${LAST.period} 期：中 ${hit.length} 顆（${hit.map(pad).join(' ')||'無'}）`;
  const h=document.getElementById('hit');if(h){h.value=hit.length;}const p=document.getElementById('pick');if(p&&m.length&&+p.value<m.length){p.value=m.length;}calc();if(DD)drawBox(DD);}
 {const el=document.getElementById('mine');if(el)el.oninput=markMine;}
-setInterval(()=>loadDraws(),5*60e3);
+setInterval(()=>{if(!(window.FEAT_OFF||[]).includes('auto'))loadDraws();},5*60e3);
 // ---- 開獎直播：YouTube 全民i彩券 官方嵌入 ----
 const YT_CH='UCX9q-HI41sFuh1Gs5X_ZZCw',YT_PL='PLkPNE4sIKVw9_RAzjrgBhmp0S2YNsVnSH';let liveMode=null;
 function liveWindow(){const t=new Date(Date.now()+8*3600e3),d=t.getUTCDay(),m=t.getUTCHours()*60+t.getUTCMinutes();if(!(d>=1&&d<=6&&m>=20*60+25&&m<=20*60+45))return false;const td=t.toISOString().slice(0,10);return !(DD&&DD.d539&&DD.d539[0]&&DD.d539[0].date===td);}
@@ -52,6 +52,7 @@ function gameTheme(){const g=document.getElementById('game');document.documentEl
 {const g=document.getElementById('game');if(g){g.addEventListener('change',gameTheme);}gameTheme();}
 // ---- 多遊戲面板（覆寫前面的 drawBox/caBox/mine/markMine）----
 const GAMES={'539':{name:'今彩539',cls:'g539',max:39,src:'台灣彩券'},lotto:{name:'大樂透',cls:'glo',max:49,sp:'特別號',src:'台灣彩券'},super:{name:'威力彩',cls:'gsu',max:38,sp:'第二區',src:'台灣彩券'},ca:{name:'加州天天樂',cls:'gca',max:39,src:'California Lottery'},hk:{ordSrc:'biga（非官方）',name:'香港六合彩',cls:'ghk',max:49,sp:'特別號',src:'香港賽馬會'},vn655:{name:'越南 Power 6/55',cls:'gvn',max:55,sp:'特別號',src:'Vietlott'},vn645:{name:'越南 Mega 6/45',cls:'gvn',max:45,src:'Vietlott'},vn535:{name:'越南 Lotto 5/35',cls:'gvn',max:35,sp:'特別號',src:'Vietlott'}};
+const FOFF=new Set(window.FEAT_OFF||[]);{const g=document.getElementById('game');if(g)[...g.options].forEach(o=>{if(FOFF.has('g_'+o.value))o.remove();});}
 const ESC=x=>String(x==null?'':x).replace(/[&<>"'`]/g,c=>'&#'+c.charCodeAt(0)+';');
 // 落球順序：只有官方有提供的彩種（台灣彩券）才顯示，沒有就標明
 const ordLine=(L,os)=>Array.isArray(L.order)&&L.order.length?`<div class="ordrow"><span class="ordlb">落球順序</span>${L.order.map((n,i)=>`<span class="ball mini">${pad(n)}</span>`).join('')}${L.special!=null?`<span class="ball sp mini">${pad(L.special)}</span>`:''}</div>${os?`<div class="note">落球順序來源：${ESC(os)}</div>`:''}`:'<div class="note">來源未提供落球順序</div>';
@@ -59,7 +60,7 @@ const curGame=()=>{const g=document.getElementById('game');return g?g.value:'539
 function gameData(k,d){d=d||DD||{};if(k==='539')return {latest:d.d539&&d.d539[0],hist:d.d539||[],updated:d.updated};if(k==='lotto')return {latest:d.lotto&&d.lotto[0],hist:d.lotto||[],updated:d.updated};if(k==='super')return {latest:d.super&&d.super[0],hist:d.super||[],updated:d.updated};const c=d[k];return c?{...c}:{hist:[]};}
 function mine(){const el=document.getElementById('mine');if(!el)return[];const mx=GAMES[curGame()].max;return [...new Set((el.value.match(/\d+/g)||[]).map(Number).filter(n=>n>=1&&n<=mx))];}
 const fmt=n=>n==null||n===''?'—':Number(n).toLocaleString('zh-TW');
-function panel(k,d,extra,note){const G=GAMES[k],x=gameData(k,d),L=x.latest;const id='pn-'+k;let b=document.getElementById(id);
+function panel(k,d,extra,note){if(FOFF.has('g_'+k)){const ob=document.getElementById('pn-'+k);if(ob)ob.remove();return;}const G=GAMES[k],x=gameData(k,d),L=x.latest;const id='pn-'+k;let b=document.getElementById(id);
  if(!b){b=document.createElement('div');b.id=id;b.className='drawbox '+G.cls;const t=document.querySelector('.tops');(t||document.getElementById('draws').parentNode).append(b);}
  if(!L){b.innerHTML=`<div class="dh"><span class="gb">${G.name}</span></div><p class="note">暫時取不到開獎資料</p>`;return;}
  const m=curGame()===k?mine():[],hit=L.nums.filter(n=>m.includes(n));
@@ -104,7 +105,7 @@ function markMine(){const el=document.getElementById('mine'),out=document.getEle
  tick();setInterval(tick,1000);
  // 開獎時段加快更新
  // 即時更新：問伺服器版本號，開獎時段每 15 秒、平常每 60 秒；有新一期就重抓並提示，不用重新整理
- {let V=null;const poll=()=>fetch('/api/draws-ver',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(x=>{if(!x)return setTimeout(poll,60e3);
+ {let V=null;const poll=()=>fetch('/api/draws-ver',{cache:'no-store'}).then(r=>r.status===404?{off:1}:r.ok?r.json():null).then(x=>{if(x&&x.off)return;if(!x)return setTimeout(poll,60e3);
   if(V!==null&&x.v!==V){loadDraws();const t=document.createElement('div');t.id='newdraw';t.textContent='🎉 有新開獎，已自動更新';t.style.cssText='position:fixed;top:10px;left:50%;transform:translateX(-50%);background:#16a34a;color:#fff;padding:8px 16px;border-radius:9px;z-index:99';document.body.appendChild(t);setTimeout(()=>t.remove(),8000);}
   V=x.v;setTimeout(poll,x.live?15e3:60e3);}).catch(()=>setTimeout(poll,60e3));poll();
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)loadDraws();});}
@@ -120,9 +121,9 @@ function markMine(){const el=document.getElementById('mine'),out=document.getEle
 const PROV_LINK={vnmb:'<a target="_blank" rel="noopener" href="https://xskt.com.vn/xsmb">xskt 北部開獎結果</a>',vnmt:'<a target="_blank" rel="noopener" href="https://xskt.com.vn/xsmt">xskt 中部開獎結果</a>',vnmn:'<a target="_blank" rel="noopener" href="https://xskt.com.vn/xsmn">xskt 南部開獎結果</a>'};
 const PROV_TIME={vnmb:'每天 台北 19:15（越南 18:15）開獎',vnmt:'每天 台北 18:15（越南 17:15）開獎',vnmn:'每天 台北 17:15（越南 16:15）開獎'};
 const PZ_NAME={DB:'特別獎',G1:'一獎',G2:'二獎',G3:'三獎',G4:'四獎',G5:'五獎',G6:'六獎',G7:'七獎',G8:'八獎'};
-function provCards(){fetch('/api/vnprov-latest').then(r=>r.ok?r.json():null).then(d=>{if(!d)return;for(const r of ['vnmn','vnmt','vnmb']){const x=d[r];if(!x)continue;const id='pn-'+r;let b=document.getElementById(id);
+function provCards(){fetch('/api/vnprov-latest').then(r=>r.ok?r.json():null).then(d=>{if(!d)return;for(const r of ['vnmn','vnmt','vnmb']){const x=d[r];if(!x){const ob=document.getElementById('pn-'+r);if(ob)ob.remove();continue;}const id='pn-'+r;let b=document.getElementById(id);
  if(!b){b=document.createElement('div');b.id=id;b.className='drawbox gvn';const t=document.querySelector('.tops');const host=t||(document.getElementById('draws')||{}).parentNode;if(!host){setTimeout(provCards,2000);return;}host.append(b);}
  if(!x.rows.length){b.innerHTML=`<div class="dh"><span class="gb">${ESC(x.name)}</span></div><p class="note">暫時取不到開獎資料</p>`;continue;}
  b.innerHTML=`<div class="dh"><span class="gb">${ESC(x.name)}</span><span class="per">${ESC(x.date)}</span></div>`+x.rows.map(p=>`<div class="brow"><b>${ESC(p.prov)}</b>　特別獎 <b style="color:#fbbf24;font-size:18px">${ESC(p.prizes.DB.join(' '))}</b></div><details><summary>${ESC(p.prov)} 全部獎號</summary><table class="hist">${['DB','G1','G2','G3','G4','G5','G6','G7','G8'].filter(k=>p.prizes[k]).map(k=>`<tr><td>${PZ_NAME[k]}</td><td>${p.prizes[k].map(ESC).join(' ')}</td></tr>`).join('')}</table></details>`).join('')+
  metaBox('📺 '+PROV_TIME[r]+'｜號碼以越南各省彩券公司公布為準｜'+PROV_LINK[r],'資料來源：xskt.com.vn（備援，請以官方為準）','');}}).catch(()=>{});}
-provCards();setInterval(provCards,5*60e3);
+provCards();setInterval(()=>{if(!(window.FEAT_OFF||[]).includes('auto'))provCards();},5*60e3);
