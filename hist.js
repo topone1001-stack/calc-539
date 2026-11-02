@@ -10,7 +10,8 @@ const pool=()=>S.pg();
 let mem={};// game -> sorted rows [period,date,nums,special]
 async function init(){if(!pool())return;await pool().query(`CREATE TABLE IF NOT EXISTS draws(game text, period text, ddate date, nums smallint[] NOT NULL, special smallint, PRIMARY KEY(game,period))`);await pool().query('ALTER TABLE draws ADD COLUMN IF NOT EXISTS ord smallint[]');await load();}
 async function load(){if(!pool())return;const r=await pool().query('SELECT game,period,to_char(ddate,\'YYYY-MM-DD\') d,nums,special,ord FROM draws ORDER BY game,ddate,period');mem={};for(const x of r.rows)(mem[x.game]=mem[x.game]||[]).push([x.period,x.d,x.nums,x.special,x.ord||null]);built={};}
-async function put(game,rows){if(!pool()||!rows.length)return 0;let n=0;for(let i=0;i<rows.length;i+=500){const ch=rows.slice(i,i+500),v=[],ps=[];ch.forEach((r,j)=>{ps.push(`($${j*6+1},$${j*6+2},$${j*6+3},$${j*6+4},$${j*6+5},$${j*6+6})`);v.push(game,String(r.period),r.date,r.nums,Number.isInteger(r.special)?r.special:null,Array.isArray(r.order)&&r.order.length?r.order:null);});
+// 同一批同期號只留一筆（有落球順序的優先），避免 ON CONFLICT 同列改兩次
+async function put(game,rows){if(!pool()||!rows.length)return 0;{const m=new Map();for(const r of rows){const k=String(r.period),p=m.get(k);if(!p||(!(p.order&&p.order.length)&&r.order&&r.order.length))m.set(k,r);}rows=[...m.values()];}let n=0;for(let i=0;i<rows.length;i+=500){const ch=rows.slice(i,i+500),v=[],ps=[];ch.forEach((r,j)=>{ps.push(`($${j*6+1},$${j*6+2},$${j*6+3},$${j*6+4},$${j*6+5},$${j*6+6})`);v.push(game,String(r.period),r.date,r.nums,Number.isInteger(r.special)?r.special:null,Array.isArray(r.order)&&r.order.length?r.order:null);});
  const q=await pool().query(`INSERT INTO draws(game,period,ddate,nums,special,ord) VALUES ${ps.join(',')} ON CONFLICT (game,period) DO UPDATE SET ord=EXCLUDED.ord WHERE draws.ord IS NULL AND EXCLUDED.ord IS NOT NULL`,v);n+=q.rowCount;}return n;}
 async function twMonth(g,m){const G=GAMES[g];const j=await (await fetch(`${TW}${G.ep}?period&month=${m}&pageNum=1&pageSize=50`,{signal:AbortSignal.timeout(20000)})).json();if(j.rtCode!==0)throw new Error('tw rt');
  return (j.content[G.key]||[]).map(x=>({period:x.period,date:x.lotteryDate.slice(0,10),nums:x.drawNumberSize.slice(0,G.n).sort((a,b)=>a-b),special:G.sp?x.drawNumberSize[G.n]:null,order:(x.drawNumberAppear||[]).slice(0,G.n)}));}
@@ -21,6 +22,14 @@ async function hkRange(v){const r=await fetch('https://info.cld.hkjc.com/graphql
 const CA_ANCHOR={period:12036,date:'2026-10-20'};// 官方期號錨點（與 calottery DrawNumber 一致）
 const caPeriod=d=>CA_ANCHOR.period+Math.round((Date.parse(d)-Date.parse(CA_ANCHOR.date))/864e5);
 const MON={Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12'};
+// lotteryusa 從 Render 一律 403，改用 lottery.net 年度頁（台灣可開、Render 可抓）
+async function caLotteryNet(y){y=y||new Date().getUTCFullYear();const r=await fetch('https://www.lottery.net/california/fantasy-5/numbers/'+y,{headers:{'User-Agent':UA,Accept:'text/html'},signal:AbortSignal.timeout(25000)});
+ if(!r.ok)throw new Error('lottery.net HTTP '+r.status);const h=await r.text(),out=[];
+ for(const c of h.split('<tr').slice(1)){const dm=c.match(/<td[^>]*>\s*([A-Z][a-z]+) (\d{1,2}), (\d{4})\s*<\/td>/);if(!dm||!MON[dm[1].slice(0,3)])continue;
+  const nums=[...c.matchAll(/<li class="ball[^"]*">\s*(\d{1,2})\s*<\/li>/g)].map(m=>+m[1]);if(nums.length!==5)continue;
+  const date=`${dm[3]}-${MON[dm[1].slice(0,3)]}-${dm[2].padStart(2,'0')}`;out.push({period:caPeriod(date),date,nums:nums.sort((a,b)=>a-b),special:null});}
+ if(!out.length)throw new Error('lottery.net parse: 0 rows');return out;}
+exports._caLotteryNet=caLotteryNet;
 async function caLotteryUSA(){const r=await fetch('https://www.lotteryusa.com/california/fantasy-5/year',{headers:{'User-Agent':UA,Accept:'text/html'},signal:AbortSignal.timeout(25000)});
  if(!r.ok)throw new Error('lotteryusa HTTP '+r.status);const h=await r.text(),out=[];
  for(const c of h.split('c-draw-card__date').slice(1)){const dm=c.match(/draw-date-sub">\s*([A-Z][a-z]{2}) (\d{1,2}), (\d{4})/);if(!dm||!MON[dm[1]])continue;
@@ -37,12 +46,12 @@ const caClean=(rows,src)=>{const ok=rows.filter(caValid);if(ok.length<rows.lengt
 // 刻意不翻頁：線上資料庫已有舊資料，這裡只需每天補新的一期，不靠翻頁補更早的歷史。
 // 期號是由錨點推算的：每次官方抓得到時，就用同日期比對期號，對不上就記錄錯誤並改用官方資料。
 async function caPage(p){if(p>1)return [];
- let usa=[];try{usa=caClean(await caLotteryUSA(),'lotteryusa');}catch(e){console.error('ca lotteryusa failed:',e.message);}
+ let usa=[];try{usa=caClean(await caLotteryNet(),'lotterynet');}catch(e){console.error('ca lottery.net failed:',e.message);}
  let off=null;try{off=caClean(await caOfficial(1),'official');}catch(e){if(!usa.length)throw e;}
  if(off&&off.length){const byDate=new Map(off.map(x=>[x.date,x.period]));
   const bad=usa.filter(x=>byDate.has(x.date)&&String(byDate.get(x.date))!==String(x.period));
   if(!usa.length||bad.length){if(bad.length)console.error('ca period mismatch vs official:',bad.length,'e.g.',bad[0].date,bad[0].period,'!=',byDate.get(bad[0].date),'; using official');off.src='official';return off;}}
- if(!usa.length)throw new Error('ca: no valid rows from any source');usa.src='lotteryusa';return usa;}
+ if(!usa.length)throw new Error('ca: no valid rows from any source');usa.src='lotterynet';return usa;}
 exports.caPage=caPage;
 const months=(from)=>{const out=[];let [y,m]=from.split('-').map(Number);const now=new Date(Date.now()+8*3600e3),ey=now.getUTCFullYear(),em=now.getUTCMonth()+1;while(y<ey||(y===ey&&m<=em)){out.push(`${y}-${String(m).padStart(2,'0')}`);m++;if(m>12){m=1;y++;}}return out;};
 // 六合彩歷史落球順序：HKJC 只給排序號碼，改用 biga 歷史表（非官方）；號碼和特別號要跟資料庫裡 HKJC 官方的一致才寫入
