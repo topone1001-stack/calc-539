@@ -99,3 +99,6 @@ p>a[href="/"]{display:inline-flex;align-items:center;min-height:44px;padding:0 4
 input:not([type=checkbox]):not([type=radio]),select{min-height:44px}
 select{font-size:16px}
 #panes button{min-height:44px}
+/* ---- 熱門分享號碼鍵 ≥44×44 ---- */
+#sg{grid-template-columns:repeat(auto-fill,minmax(44px,1fr))!important;gap:4px;max-width:640px}
+#sg button{min-width:44px;min-height:44px;padding:0!important;font-size:15px}
