@@ -22,6 +22,14 @@ async function hkRange(v){const r=await fetch('https://info.cld.hkjc.com/graphql
 const CA_ANCHOR={period:12036,date:'2026-10-20'};// 官方期號錨點（與 calottery DrawNumber 一致）
 const caPeriod=d=>CA_ANCHOR.period+Math.round((Date.parse(d)-Date.parse(CA_ANCHOR.date))/864e5);
 const MON={Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12'};
+// 樂透王（台灣網站，有期號）：日期是台北日期，加州當地日期＝前一天
+async function caLotteryWang(){const r=await fetch('https://www.lotterywang.com/lottoCA5',{headers:{'User-Agent':UA,Accept:'text/html'},signal:AbortSignal.timeout(25000)});
+ if(!r.ok)throw new Error('lotterywang HTTP '+r.status);const h=await r.text(),m=new Map();
+ for(const c of h.split('List_date').slice(1)){const dm=c.match(/^[^>]*>(\d{4})\.(\d{2})\.(\d{2})/),pm=c.match(/List_period[^>]*>(\d{4,6})/);if(!dm||!pm)continue;
+  const nums=[...c.split('List_date')[0].matchAll(/Ball_ball[^"]*">(\d{1,2})<\/li>/g)].slice(0,5).map(x=>+x[1]);if(nums.length!==5)continue;
+  const d=new Date(Date.UTC(+dm[1],+dm[2]-1,+dm[3])-864e5).toISOString().slice(0,10);if(!m.has(+pm[1]))m.set(+pm[1],{period:+pm[1],date:d,nums:nums.sort((a,b)=>a-b),special:null});}
+ const out=[...m.values()];if(!out.length)throw new Error('lotterywang parse: 0 rows');return out;}
+exports._caLotteryWang=caLotteryWang;
 // lotteryusa 從 Render 一律 403，改用 lottery.net 年度頁（台灣可開、Render 可抓）
 async function caLotteryNet(y){y=y||new Date().getUTCFullYear();const r=await fetch('https://www.lottery.net/california/fantasy-5/numbers/'+y,{headers:{'User-Agent':UA,Accept:'text/html'},signal:AbortSignal.timeout(25000)});
  if(!r.ok)throw new Error('lottery.net HTTP '+r.status);const h=await r.text(),out=[];
@@ -46,12 +54,13 @@ const caClean=(rows,src)=>{const ok=rows.filter(caValid);if(ok.length<rows.lengt
 // 刻意不翻頁：線上資料庫已有舊資料，這裡只需每天補新的一期，不靠翻頁補更早的歷史。
 // 期號是由錨點推算的：每次官方抓得到時，就用同日期比對期號，對不上就記錄錯誤並改用官方資料。
 async function caPage(p){if(p>1)return [];
- let usa=[];try{usa=caClean(await caLotteryNet(),'lotterynet');}catch(e){console.error('ca lottery.net failed:',e.message);}
+ let usa=[],usaSrc='lotterywang';try{usa=caClean(await caLotteryWang(),'lotterywang');}catch(e){console.error('ca lotterywang failed:',e.message);}
+ if(!usa.length){usaSrc='lotterynet';try{usa=caClean(await caLotteryNet(),'lotterynet');}catch(e){console.error('ca lottery.net failed:',e.message);}}
  let off=null;try{off=caClean(await caOfficial(1),'official');}catch(e){if(!usa.length)throw e;}
  if(off&&off.length){const byDate=new Map(off.map(x=>[x.date,x.period]));
   const bad=usa.filter(x=>byDate.has(x.date)&&String(byDate.get(x.date))!==String(x.period));
   if(!usa.length||bad.length){if(bad.length)console.error('ca period mismatch vs official:',bad.length,'e.g.',bad[0].date,bad[0].period,'!=',byDate.get(bad[0].date),'; using official');off.src='official';return off;}}
- if(!usa.length)throw new Error('ca: no valid rows from any source');usa.src='lotterynet';return usa;}
+ if(!usa.length)throw new Error('ca: no valid rows from any source');usa.src=usaSrc;return usa;}
 exports.caPage=caPage;
 const months=(from)=>{const out=[];let [y,m]=from.split('-').map(Number);const now=new Date(Date.now()+8*3600e3),ey=now.getUTCFullYear(),em=now.getUTCMonth()+1;while(y<ey||(y===ey&&m<=em)){out.push(`${y}-${String(m).padStart(2,'0')}`);m++;if(m>12){m=1;y++;}}return out;};
 // 六合彩歷史落球順序：HKJC 只給排序號碼，改用 biga 歷史表（非官方）；號碼和特別號要跟資料庫裡 HKJC 官方的一致才寫入

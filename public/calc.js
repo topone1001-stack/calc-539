@@ -67,7 +67,7 @@ function panel(k,d,extra,note){const G=GAMES[k],x=gameData(k,d),L=x.latest;const
  `<details><summary>近 ${x.hist.length} 期開獎</summary><table class="hist">${x.hist.map(h=>`<tr><td>${ESC(h.period)}</td><td>${ESC(h.date)}</td><td>${h.nums.map(pad).join(' ')}${h.special!=null?' ＋'+pad(h.special):''}</td></tr>`).join('')}</table></details>`+
  metaBox(note,'資料來源：'+srcLabel(k,G,L,x),x.updated?'更新：'+new Date(x.updated).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'}):'');}
 // 資料來源：以「最新一期」實際抓到的來源為準（每期存 src），沒有就用整包的 src；台彩、六合彩只抓官方
-const ALT={biga:'biga 彩六軟體',lotterynet:'lottery.net',lotteryusa:'lotteryusa.com',magayo:'magayo.com',xoso:'xoso.com.vn'};
+const ALT={lotterywang:'樂透王',biga:'biga 彩六軟體',lotterynet:'lottery.net',lotteryusa:'lotteryusa.com',magayo:'magayo.com',xoso:'xoso.com.vn'};
 function srcLabel(k,G,L,x){const s=(L&&L.src)||x.src||(['539','lotto','super','hk'].includes(k)?'official':'');return s==='official'?G.src+' 官方':ALT[s]?ALT[s]+'（備援，請以官方為準）':'來源未標示（請以官方為準）';}
 // 卡片底部說明：拆成短的小灰字行（開獎時間／號碼與連結／資料來源／更新時間）
 function metaBox(note,src,upd){const seg=(note||'').split('｜').filter(Boolean),t=seg.filter(x=>/開獎/.test(x)&&!x.includes('href=')),o=seg.filter(x=>!t.includes(x));
