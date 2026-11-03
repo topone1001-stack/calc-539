@@ -3,9 +3,9 @@
 const crypto=require('crypto'),path=require('path');
 const W=[1,2,3,4,5,6],WT=W.reduce((a,b)=>a+b,0);           // 6 種符號的固定出現權重（不開放調整）
 const GAMES={
- moon:{name:'月砂神殿',theme:'egypt',syms:['月神寶石','金色聖眼','生命之符','金字塔','聖甲蟲','金幣'],
+ moon:{name:'月砂神殿',theme:'egypt',syms:['月神祭司','紫晶寶石','金色聖眼','金字塔','聖甲蟲','月紋金幣'],
   def:{enabled:true,pays:[300,80,40,20,12,8],pair:2,rtp:92}},
- dodo:{name:'嘟嘟叢林探險',theme:'jungle',syms:['黃金寶箱','金鑰匙','獅子徽章','猴子徽章','香蕉','椰子'],
+ dodo:{name:'嘟嘟叢林探險',theme:'jungle',syms:['嘟嘟老隊長','叢林少女','金鬃獅王','調皮猴','黃金寶箱','金幣堆'],
   def:{enabled:true,pays:[250,90,40,18,12,8],pair:2,rtp:92}}};
 const SOON=[{id:'scarab',name:'聖甲蟲寶庫',img:'scarab'},{id:'sunking',name:'日鷹王座',img:'sunking.jpg'},{id:'river',name:'尼羅星河',img:'river'},{id:'parrot',name:'鸚鵡金島',img:'parrot'}];
 // 遊戲本身尚未開放（美術重做中）：只有大廳上線。設 PLAY_RELEASED=0 可只開大廳、遊戲顯示即將開放

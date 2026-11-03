@@ -69,3 +69,15 @@ a{color:inherit;text-decoration:none}
 .startf{display:flex;flex-direction:column;gap:10px;margin-top:10px}.startf label{display:flex;flex-direction:column;gap:6px;font-weight:700}.startf input{padding:12px;border-radius:12px;border:2px solid #a78bfa;background:#0b0420;color:#fff;font-size:20px}
 .startf[hidden]{display:none}
 .win[hidden]{display:none}
+/* v2：3D 符號、走馬燈框、厚金紅標題 */
+.strip img{box-sizing:border-box;padding:4px;object-fit:contain;border-radius:14px;display:block}
+.reel{background:#12002a}
+.machine{padding:22px;background:linear-gradient(180deg,#7a0f2e,#3b0764);border:6px solid transparent;background-clip:padding-box;box-shadow:0 0 0 5px #ffd75e,0 0 0 9px #7c4a03,0 0 50px #f5c54299,0 18px 34px #000d}
+.machine::before{content:"";position:absolute;inset:6px;border-radius:16px;pointer-events:none;background:radial-gradient(circle,#fff9c4 0 3px,#ffb300 4px,transparent 6px) 0 0/22px 22px;-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;padding:8px;animation:bulbs .8s steps(2) infinite}
+@keyframes bulbs{50%{background-position:11px 0;filter:brightness(1.5)}}
+.logo.small span{font-size:clamp(28px,7vw,52px);letter-spacing:2px;background:linear-gradient(180deg,#fffde7 0%,#ffe082 25%,#ffb300 50%,#ff6f00 70%,#fff59d 100%);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-stroke:3px #8b0000;paint-order:stroke fill;filter:drop-shadow(0 5px 0 #4a0012) drop-shadow(0 0 4px #fff) drop-shadow(0 0 18px #ff9800);font-family:"Noto Sans TC","PingFang TC",sans-serif;font-weight:900}
+.logo.small{display:inline-block;padding:6px 26px;border-radius:24px;background:linear-gradient(180deg,#5b21b6,#2e1065);border:3px solid #ffd75e;box-shadow:0 0 0 3px #7c4a03,0 0 24px #a855f7aa;position:relative;left:auto;top:auto;display:table;margin:8px auto 14px;max-width:92vw}
+.logo.small::after{content:"";position:absolute;inset:-9px;border-radius:30px;pointer-events:none;background:radial-gradient(circle,#fff 0 2px,#ff4081 3px,transparent 5px) 0 0/18px 18px;-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;padding:6px;animation:bulbs 1s steps(2) infinite}
+.t-jungle{background:radial-gradient(ellipse at 50% -10%,#2e7d32 0%,#1b5e20 30%,#0b2a0f 75%) fixed}
+.t-jungle .machine{background:linear-gradient(180deg,#b71c1c,#4a148c)}
+.logo.small span{background:none;color:#ffe066;-webkit-text-stroke:0;filter:none;text-shadow:0 1px 0 #fff8c4,0 -1px 0 #ffb300,2px 2px 0 #c62828,-2px 2px 0 #c62828,2px -2px 0 #c62828,-2px -2px 0 #c62828,0 5px 0 #7f0000,0 7px 0 #4a0012,0 0 18px #ff9800}

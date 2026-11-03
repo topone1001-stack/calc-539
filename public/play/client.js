@@ -4,7 +4,7 @@ const fmt=n=>Number(n).toLocaleString('zh-TW');
 async function csrf(){if(!CS)CS=(await (await fetch('/api/csrf')).json()).csrf;return CS;}
 async function post(u,b){const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF':await csrf()},body:JSON.stringify(b)});let j={};try{j=await r.json();}catch(e){}return {ok:r.ok,status:r.status,j};}
 const setPts=v=>{document.querySelectorAll('#pts,#ptsBig').forEach(e=>e.textContent=v==null?'—':fmt(v));};
-const symImg=(g,i)=>'/play/a/'+g+i+'.svg';
+const symImg=(g,i)=>'/play/a/'+g+i+'.jpg';
 const META={moon:{img:'moon.jpg',tag:'hot',max:'300x',f:['hot','egypt']},dodo:{img:'jungle.jpg',tag:'new',max:'250x',f:['new','jungle']}};
 const SOONF={scarab:['egypt','new'],sunking:['egypt','hot'],river:['egypt'],parrot:['jungle','new']};
 async function lobby(){const d=await (await fetch('/api/play/lobby')).json();$('#uname').textContent=d.user;setPts(d.wallet&&d.wallet.pts);
