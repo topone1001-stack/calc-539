@@ -2,6 +2,8 @@ const express=require('express'),session=require('express-session'),bcrypt=requi
 const DR=require('./draws'),S=require('./store'),HI=require('./hist');const VP=require('./vnprov');const FT=require('./features');
 (async()=>{await S.init();if(!S.get('users')){try{const f=require('path').join(__dirname,'users.json');if(require('fs').existsSync(f)){await S.set('users',JSON.parse(require('fs').readFileSync(f,'utf8')));console.log('users imported from file');}}catch(e){}}DR.start();HI.start().catch(e=>console.error('hist',e.message));VP.start().catch(e=>console.error('vnprov',e.message));
 const app=express();app.set('trust proxy',1);app.disable('x-powered-by');
+// 真實用戶 IP：Render 前面是 Cloudflare，CF-Connecting-IP 由 Cloudflare 覆寫，不能被用戶偽造
+const IPRE=/^[0-9a-fA-F:.]{3,45}$/;app.use((q,s,n)=>{const c=String(q.get('cf-connecting-ip')||q.get('true-client-ip')||'').trim();if(IPRE.test(c))Object.defineProperty(q,'ip',{value:c,configurable:true});n();});
 const helmet=require('helmet');
 app.use(helmet({contentSecurityPolicy:{useDefaults:false,directives:{'default-src':["'self'"],'script-src':["'self'","'unsafe-inline'",'https://cdn.jsdelivr.net'],'script-src-attr':["'unsafe-inline'"],'style-src':["'self'","'unsafe-inline'"],
  'img-src':["'self'",'data:','https://i.ytimg.com'],'media-src':["'self'"],'connect-src':["'self'"],'font-src':["'self'",'data:'],'frame-src':['https://www.youtube.com','https://www.youtube-nocookie.com'],'object-src':["'none'"],'base-uri':["'self'"],'form-action':["'self'"],'frame-ancestors':["'none'"],...(process.env.NODE_ENV==='production'?{'upgrade-insecure-requests':[]}:{})}},
@@ -11,7 +13,7 @@ app.use(rateLimit({windowMs:60e3,limit:300,standardHeaders:true,legacyHeaders:fa
 // 嚴格 CSP 先以 Report-Only 試行（不含 unsafe-inline），違規回報到 /csp-report 寫進 log
 app.use((q,s,n)=>{s.set('Content-Security-Policy-Report-Only',"default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; script-src-attr 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://i.ytimg.com; connect-src 'self'; frame-src https://www.youtube.com https://www.youtube-nocookie.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; report-uri /csp-report");n();});
 const CSPR=rateLimit({windowMs:60e3,limit:30,standardHeaders:false,legacyHeaders:false});
-app.post('/csp-report',CSPR,express.json({type:['application/csp-report','application/json'],limit:'8kb'}),(q,s)=>{try{const r=(q.body&&q.body['csp-report'])||{};console.log('CSP-RO',String(r['document-uri']||'').slice(0,120),String(r['violated-directive']||'').slice(0,60),String(r['blocked-uri']||'').slice(0,120));}catch(e){}s.status(204).end();});
+app.post('/csp-report',CSPR,express.json({type:['application/csp-report','application/json'],limit:'8kb'}),(q,s)=>{try{const r=(q.body&&q.body['csp-report'])||{};const c=(x,m)=>String(x||'').replace(/[\x00-\x1f\x7f]+/g,' ').slice(0,m);console.log('CSP-RO',c(r['document-uri'],120),c(r['violated-directive'],60),c(r['blocked-uri'],120),c(r['source-file'],120)+':'+c(r['line-number'],6));}catch(e){}s.status(204).end();});
 app.get('/healthz',(q,s)=>s.set('Cache-Control','no-store').type('text').send('ok'));
 const PROD=process.env.NODE_ENV==='production';
 if(process.env.SEED_ADMIN_HASH){const us=U.load();if(!Object.values(us).some(u=>u.role==='admin'||!u.role)){us.admin={hash:process.env.SEED_ADMIN_HASH,role:'admin',enabled:true,expires:'',perms:['bao','col','car','prize','draw']};await S.set('users',us);console.log('seeded admin');}}
@@ -58,7 +60,7 @@ app.post('/login',rateLimit({windowMs:15*60e3,limit:20,handler:(q,s)=>{susp(q,'�
  if(ok&&u&&!eff(U.load(),name).ok){rec(false);return s.redirect('/login?e=off');}
  if(ok&&u){const us=U.load();us[name]={...us[name],lastLogin:new Date().toISOString(),lastIp:q.ip};U.save(us);rec(true);}else rec(false);
  if(ok&&u){BF.delete('ipuser:'+q.ip+'|'+name);AF.delete(name);return q.session.regenerate(()=>{q.session.user=name;q.session.ip=q.ip;s.redirect('/');});}
- bfFail(q,'ip:'+q.ip);if(VALID(name)){bfFail(q,'ipuser:'+q.ip+'|'+name);AF.set(name,{f:af.f+1,t:Date.now()});}s.redirect('/login?e=1');});
+ console.log('LOGIN-FAIL ip',q.ip,'cf',String(q.get('cf-connecting-ip')||'-').slice(0,45),'xff',String(q.get('x-forwarded-for')||'-').slice(0,120));bfFail(q,'ip:'+q.ip);if(VALID(name)){bfFail(q,'ipuser:'+q.ip+'|'+name);AF.set(name,{f:af.f+1,t:Date.now()});}s.redirect('/login?e=1');});
 app.post('/logout',(q,s)=>q.session.destroy(()=>{s.clearCookie('calc.sid');s.redirect('/login');}));
 
 // 自助改密碼（首次登入／重設後強制）
@@ -71,6 +73,7 @@ app.post('/password',rateLimit({windowMs:15*60e3,limit:20}),auth0,chk,(q,s)=>{co
  if(a.length<8||a.length>200)return send('新密碼至少 8 字');if(a!==b)return send('兩次新密碼不一致');if(a===DEFPW)return send('不能使用預設密碼');if(a===o)return send('新密碼不能和舊密碼相同');
  us[n]={...us[n],hash:bcrypt.hashSync(a,12),mustChange:false,pwSetAt:new Date().toISOString()};U.save(us);oplog(q,'修改自己密碼',n,'');q.session.regenerate(()=>{q.session.user=n;q.session.ip=q.ip;s.redirect('/');});});
 app.get(['/tiger.mp4','/tiger.jpg'],(q,s)=>s.sendFile(P(q.path.slice(1)),{maxAge:'7d'}));
+app.get(['/login.js','/admin.js'],(q,s)=>s.sendFile(P(q.path.slice(1))));
 app.get('/layout.js',(q,s)=>s.sendFile(P('layout.js')));
 app.get('/style.css',(q,s)=>s.sendFile(P('style.css')));
 // server-side feature gating: strip sections the user lacks
@@ -79,7 +82,7 @@ const CALC=fs.readFileSync(P('calc.html'),'utf8');
 app.get('/',auth,(q,s)=>{const i=CALC.indexOf('<h2>'),e=CALC.lastIndexOf('</div></div><script');const parts=CALC.slice(i,e).split(/(?=<h2>)/);
  let body=parts.map((p,k)=>q.u.perms.includes(ALL[k])?'<section class="sec sec-'+ALL[k]+'">'+p+'</section>':'').join('');body=body&&'<div class="secs">'+body+'</div>';if(!body)body='<p>此帳號尚未開通任何功能，請聯絡管理員。</p>';
  const fo=FT.off();const dbx=fo.has('live')?DRAWBOX.replace(/<details id="live"[\s\S]*?<\/details>/,''):DRAWBOX;
- s.set('Cache-Control','no-store').type('html').send(CALC.slice(0,i).replace('<script src="/layout.js"></script>','<script src="/layout.js"></script><script>window.FEAT_OFF='+JSON.stringify([...fo])+'</script>')+'<div class="tops">'+dbx+'</div>'+body+CALC.slice(e));});
+ s.set('Cache-Control','no-store').type('html').send(CALC.slice(0,i).replace('<script src="/layout.js"></script>','<meta name="feat-off" content="'+esc(JSON.stringify([...fo]))+'"><script src="/layout.js"></script>')+'<div class="tops">'+dbx+'</div>'+body+CALC.slice(e));});
 app.get('/calc.js',auth,(q,s)=>s.sendFile(P('calc.js')));
 app.get('/draws',auth,(q,s)=>s.set('Cache-Control','no-store').json(FT.draws(DR.get())));
 // 很小的「有沒有新開獎」查詢：網頁每 15–60 秒問一次，版本變了才重抓 /draws。live＝現在有彩種在等開獎結果
@@ -155,8 +158,8 @@ const page=(q,msg,created)=>{const t=csrf(q),us=U.load(),me=q.session.user,isA=q
   <div class="note">有效權限：${e.perms.map(k=>(FEATS.find(x=>x[0]===k)||[,k])[1]).join('、')||'無'}</div>
   <details><summary>詳細：我的號碼／分享／登入紀錄</summary><div class="note"><b>我的號碼：</b><br>${sets}<br><b>熱門分享：</b><br>${sh}<br><b>最近登入：</b><br>${lh}</div></details>
   ${n===me?'':`<details><summary>編輯</summary>${F('perms',H+permBox+`${isA?`<label class="ck">角色<select name="role">${['user','agent','admin'].map(r=>`<option value="${r}" ${u.role===r?'selected':''}>${ROLES[r]}</option>`).join('')}</select></label>`:`<input type="hidden" name="role" value="${u.role}">`}<label class="ck">到期<input type="date" name="expires" value="${esc(u.expires)}"${!isA&&myEff.effExpires?` max="${myEff.effExpires}"`:''}></label><button>儲存設定</button>`)}
-  <div class="row">${F('reset',H+`<button onclick="return confirm('把 ${esc(n)} 的密碼重設為 12345678？')">重設密碼為 12345678</button>`)}
-  ${F('toggle',H+`<button>${u.enabled?'停用':'啟用'}</button>`)}${F('delete',H+`<button class="del" onclick="return confirm('確定刪除 ${esc(n)}？')">刪除</button>`)}</div></details>`}</div>`;}).join('');
+  <div class="row">${F('reset',H+`<button data-confirm="把 ${esc(n)} 的密碼重設為新的隨機密碼？">重設密碼（隨機）</button>`)}
+  ${F('toggle',H+`<button>${u.enabled?'停用':'啟用'}</button>`)}${F('delete',H+`<button class="del" data-confirm="確定刪除 ${esc(n)}？">刪除</button>`)}</div></details>`}</div>`;}).join('');
  const ops=(S.get('oplog')||[]).filter(o=>isA||o.by===me||vis.has(o.target)||vis.has(o.by)).slice(0,OPN);
  const sel=(nm,opts,v)=>`<select name="${nm}">${opts.map(([k,l])=>`<option value="${esc(k)}" ${v===k?'selected':''}>${esc(l)}</option>`).join('')}</select>`;
  return `<!doctype html><html lang="zh-TW"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>管理後台</title><link rel="stylesheet" href="/style.css"><script src="/layout.js"></script><style>
@@ -172,14 +175,7 @@ form{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0}.row{di
 <div class="box"><form method="get" action="/admin"><input name="q" placeholder="搜尋帳號／IP／上線" value="${esc(f.q||'')}">${sel('agent',[['','全部代理線'],...agents.map(a=>[a,'代理：'+a])],f.agent||'')}${sel('role',[['','全部角色'],['admin','管理員'],['agent','代理'],['user','會員']],f.role||'')}${sel('st',[['','全部狀態'],['ok','正常'],['bad','停用／過期']],f.st||'')}<button>篩選</button> <a href="/admin">清除</a></form>
 <h2>帳號樹（${list.length} / ${vis.size}）</h2>${rows||'<p class="note">沒有符合的帳號</p>'}</div>
 <div class="box"><details ${ops.length?'':'open'}><summary><b>操作紀錄（最近 ${ops.length} 筆）</b></summary><div style="overflow:auto"><table><tr><th>時間</th><th>操作者</th><th>動作</th><th>對象</th><th>內容</th><th>IP</th></tr>${ops.map(o=>`<tr><td>${tpe(o.t)}</td><td>${esc(o.by)}</td><td>${esc(o.act)}</td><td>${esc(o.target)}</td><td>${esc(o.detail)}</td><td>${esc(o.ip||'')}</td></tr>`).join('')}</table></div></details></div>
-</div><script>(function(){
-const u=document.getElementById('newu'),rs=document.querySelector('form[action="/admin/create"] select[name=role]');
-const gn=async()=>{try{const j=await (await fetch('/admin/genname?role='+(rs?rs.value:'user'))).json();u.value=j.name;}catch(e){}};if(u&&rs)rs.addEventListener('change',gn);const rg=document.getElementById('regen');if(u&&rg)rg.addEventListener('click',gn);
-const t=document.getElementById('cptxt'),b=document.getElementById('cpbtn'),m=document.getElementById('cpmsg');if(!t)return;
-const legacy=s=>{const a=document.createElement('textarea');a.value=s;a.setAttribute('readonly','');a.style.cssText='position:fixed;top:0;left:0;opacity:0;font-size:16px';document.body.append(a);a.focus();a.select();a.setSelectionRange(0,s.length);let ok=false;try{ok=document.execCommand('copy');}catch(e){}a.remove();return ok;};
-const say=ok=>{m.textContent=ok?'已複製，可直接貼給客戶':'複製失敗，請長按上方文字複製';m.style.color=ok?'#86efac':'#fcd34d';};
-b.onclick=()=>{const s=t.textContent;// 直接在點擊事件內複製（iPhone Safari 需要）
- if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(s).then(()=>say(true),()=>say(legacy(s)));}else say(legacy(s));};})();</script></body></html>`;};
+</div><script src="/admin.js"></script></body></html>`;};
 const NAMECH='23456789abcdefghjkmnpqrstuvwxyz';const AUTO_RE=/^[mas][23456789abcdefghjkmnpqrstuvwxyz]{6}$/;const genName=(us,role)=>{const pre=role==='agent'?'a':role==='admin'?'s':'m';for(let i=0;i<500;i++){let n=pre;for(let j=0;j<6;j++)n+=NAMECH[crypto.randomInt(NAMECH.length)];if(!Object.prototype.hasOwnProperty.call(us,n))return n;}return pre+Date.now().toString(36).slice(-8);};// 隨機帳號：前綴 m/a/s＋6 碼（去掉 0/1/i/l/o 易混字元），檢查不重複
 app.get('/admin/genname',auth,mgr,(q,s)=>{const r=q.u.role==='admin'&&['user','agent','admin'].includes(q.query.role)?q.query.role:'user';s.set('Cache-Control','no-store').json({name:genName(U.load(),r)});});
 const go=(q,s,m)=>{q.session.flash=m;s.redirect('/admin'+(q.get('Referer')||'').replace(/^.*\/admin/,'').replace(/[^?=&\w%.\-]/g,'').slice(0,200));};
@@ -189,7 +185,7 @@ const date=x=>/^\d{4}-\d{2}-\d{2}$/.test(x||'')?x:'';
 // 每個操作：伺服器端檢查對象是否在自己的下線內
 const A=(name,fn)=>app.post('/admin/'+name,auth,mgr,chk,(q,s)=>{const us=U.load(),n=String(q.body.username||'');
  if(name!=='create'){if(!us[n])return go(q,s,'找不到帳號');if(n===q.session.user)return go(q,s,'不能對自己操作');if(!new Set(visible(q)).has(n)){susp(q,'越權操作',name+' → '+n);return go(q,s,'無權管理此帳號');}}
- const r=fn(q,us,n);if(typeof r==='string'&&!r.startsWith('✓'))return go(q,s,r);U.save(us);oplog(q,{create:'新增',reset:'重設密碼',toggle:'停用/啟用',delete:'刪除',perms:'修改設定'}[name],name==='create'&&q.session.created||n,r.replace(/^✓\s*/,''));go(q,s,r);});
+ const r=fn(q,us,n);if(typeof r==='string'&&!r.startsWith('✓'))return go(q,s,r);U.save(us);oplog(q,{create:'新增',reset:'重設密碼',toggle:'停用/啟用',delete:'刪除',perms:'修改設定'}[name],name==='create'&&q.session.created||n,r.replace(/^✓\s*/,''));{const p=q.session.resetPw;delete q.session.resetPw;go(q,s,p?r+'　新密碼（只顯示這一次）：'+p:r);}});
 const lastAdmin=(us,n)=>norm(n,us[n]).role==='admin'&&Object.keys(us).filter(k=>{const u=norm(k,us[k]);return u.role==='admin'&&u.enabled;}).length<=1;
 // 權限／到期上限＝上線（若為代理）與操作者的有效值
 function limits(q,us,parent){const isA=q.u.role==='admin';let perms=isA?ALL.slice():eff(us,q.session.user).perms,exp=isA?'':eff(us,q.session.user).effExpires;
@@ -201,7 +197,7 @@ A('create',(q,us,n)=>{if(AUTO_RE.test(n)&&us[n]){const r=['user','agent','admin'
  else if(parent&&!(us[parent]&&norm(parent,us[parent]).role==='agent'))parent='';if(role==='admin')parent='';
  const L=limits(q,us,parent);us[n]={hash:bcrypt.hashSync(DEFPW,12),mustChange:true,pwSetAt:new Date().toISOString(),role,parent,enabled:true,expires:clampExp(date(q.body.expires),L.exp),perms:arr(q.body.perms).filter(k=>L.perms.includes(k)),created:new Date().toISOString(),createdBy:q.session.user,note:String(q.body.note||'').replace(/[\r\n\t]+/g,' ').trim().slice(0,200)};
  q.session.created=n;return `✓ 已新增 ${ROLES[role]} ${n}${parent?'（上線 '+parent+'）':''}`;});
-A('reset',(q,us,n)=>{us[n]={...us[n],...norm(n,us[n]),hash:bcrypt.hashSync(DEFPW,12),mustChange:true,pwSetAt:new Date().toISOString()};return '✓ 已重設 '+n+' 的密碼為 12345678（下次登入須修改）';});
+A('reset',(q,us,n)=>{let pw='';for(let k=0;k<10;k++)pw+=NAMECH[crypto.randomInt(NAMECH.length)];us[n]={...us[n],...norm(n,us[n]),hash:bcrypt.hashSync(pw,12),mustChange:true,pwSetAt:new Date().toISOString()};q.session.resetPw=pw;return '✓ 已重設 '+n+' 的密碼（下次登入須修改）';});
 A('toggle',(q,us,n)=>{if(norm(n,us[n]).enabled&&lastAdmin(us,n))return '至少要保留一位管理員';us[n]={...us[n],enabled:!norm(n,us[n]).enabled};const dn=downs(us,n).length;return '✓ 已'+(us[n].enabled?'啟用 ':'停用 ')+n+(dn&&!us[n].enabled?`（其 ${dn} 個下線同時無法登入）`:'');});
 A('delete',(q,us,n)=>{const dn=downs(us,n).length;if(dn)return `${n} 還有 ${dn} 個下線，請先刪除或停用下線`;if(lastAdmin(us,n))return '至少要保留一位管理員';delete us[n];return '✓ 已刪除 '+n;});
 A('perms',(q,us,n)=>{const isA=q.u.role==='admin';const u=norm(n,us[n]);let role=['user','agent','admin'].includes(q.body.role)?q.body.role:u.role;if(!isA&&role!==u.role)return '只有管理員可以變更角色';

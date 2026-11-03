@@ -1,3 +1,4 @@
+(function(){const m=document.querySelector('meta[name=feat-off]');if(m)try{window.FEAT_OFF=JSON.parse(m.content);}catch(e){}})();
 // 版面切換：auto（依螢幕寬度）/ m 手機版 / d 電腦版，記在 localStorage
 (function(){const K='calc.layout',vp=document.querySelector('meta[name=viewport]');
  const get=()=>localStorage.getItem(K)||'auto';
