@@ -3,8 +3,8 @@
 const assert=require('assert');const S=require('../store');let n=0;const t=(m,f)=>{f();n++;console.log('✓',m);};
 const FT=require('../features');
 const D={d539:[{period:'1',date:'d',nums:[1,2,3,4,5],order:[5,4,3,2,1]},{period:'0',date:'c',nums:[1,2,3,4,6]}],lotto:[{period:'2',nums:[1]}],hk:{latest:{period:'h',nums:[1],order:[1]},hist:[{order:[1]},{order:[2]}]},ca:{latest:{period:'c'},hist:[1,2,3]},replay:{id:'x'},other:{d3:[]}};
-t('沒有設定＝全部開啟',()=>{assert.equal(FT.off().size,0);KEYS_ON();assert.strictEqual(FT.draws(D),D);});
-function KEYS_ON(){for(const k of FT.KEYS)assert.ok(FT.on(k),k);}
+t('沒有設定＝一般功能全開、預設關閉的(play)是關的',()=>{assert.deepEqual([...FT.off()],FT.DEFAULT_OFF);KEYS_ON();assert.strictEqual(FT.draws(D),D);});
+function KEYS_ON(){for(const k of FT.KEYS)assert.equal(FT.on(k),!FT.DEFAULT_OFF.includes(k),k);}
 t('設定格式壞掉＝全部開啟',()=>{const g=S.get;S.get=()=>({off:'bad'});KEYS_ON();S.get=()=>{throw new Error('db down')};KEYS_ON();S.get=g;});
 t('涵蓋需求的開關',()=>{for(const k of ['g_539','g_lotto','g_super','g_ca','g_hk','g_vn655','g_vn645','g_vn535','g_vnmn','g_vnmt','g_vnmb','ord','recent','t_hist','t_num','t_trend','t_adv','t_ord','t_share','t_sand','t_mine','t_other','bao','draw','guess','share','mynum','live','auto'])assert.ok(FT.KEYS.includes(k),k);});
 (async()=>{const v0=FT.ver();
@@ -15,7 +15,10 @@ t('涵蓋需求的開關',()=>{for(const k of ['g_539','g_lotto','g_super','g_ca
  t('歷史 API：落球順序欄位拿掉、遊戲關閉',()=>{const h=FT.hist({rows:[['1','d',[1],null,[1]]],ordN:1});assert.equal(h.rows[0].length,4);assert.equal(h.ordN,0);assert.equal(FT.gameOn('hk'),false);assert.equal(FT.gameOn('539'),true);});
  await FT.save(['t_hist','t_num','t_trend','t_adv','t_ord','t_share','t_sand','t_mine']);
  t('統計分頁全關＝歷史 API 不給資料',()=>assert.equal(FT.histOn(),false));
- await FT.save([]);t('切回全部開啟',()=>{KEYS_ON();assert.equal(FT.histOn(),true);});
+ await FT.save([]);t('全部打勾儲存＝連 play 也開',()=>{for(const k of FT.KEYS)assert.ok(FT.on(k),k);assert.equal(FT.histOn(),true);});
+ await FT.save(['play']);t('play 沒勾＝關閉，其他照舊',()=>{assert.equal(FT.on('play'),false);assert.ok(FT.on('bao'));});
+ {const g=S.get;S.get=()=>({off:[]});t('舊格式（只有 off、沒有 on）＝play 仍關閉，部署當下不會自動打開',()=>assert.equal(FT.on('play'),false));S.get=()=>{throw new Error('db down')};t('讀取失敗＝play 關閉',()=>assert.equal(FT.on('play'),false));S.get=g;}
+ await FT.save(FT.KEYS.filter(k=>k!=='play'));await FT.save([]);
  if(process.env.CALC_URL)await integ();
  console.log(`\n${n} 項全部通過`);process.exit(0);})().catch(e=>{console.error('✗',e.message);process.exit(1);});
 async function integ(){const B=process.env.CALC_URL;
