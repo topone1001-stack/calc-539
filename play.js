@@ -4,9 +4,9 @@ const crypto=require('crypto'),path=require('path');
 const W=[1,2,3,4,5,6],WT=W.reduce((a,b)=>a+b,0);           // 6 種符號的固定出現權重（不開放調整）
 const GAMES={
  moon:{name:'月砂神殿',theme:'egypt',syms:['月神祭司','紫晶寶石','金色聖眼','金字塔','聖甲蟲','月紋金幣'],
-  def:{enabled:true,pays:[300,80,40,20,12,8],pair:2,rtp:92}},
+  def:{enabled:true,pays:[300,80,36,18,10,6],pair:2,rtp:92.3}},
  dodo:{name:'嘟嘟叢林探險',theme:'jungle',syms:['嘟嘟老隊長','叢林少女','金鬃獅王','調皮猴','黃金寶箱','金幣堆'],
-  def:{enabled:true,pays:[250,90,40,18,12,8],pair:2,rtp:92}}};
+  def:{enabled:true,pays:[250,80,40,18,10,6],pair:2,rtp:92.9}}};
 const SOON=[{id:'scarab',name:'聖甲蟲寶庫',img:'scarab'},{id:'sunking',name:'日鷹王座',img:'sunking.jpg'},{id:'river',name:'尼羅星河',img:'river'},{id:'parrot',name:'鸚鵡金島',img:'parrot'}];
 // 遊戲本身尚未開放（美術重做中）：只有大廳上線。設 PLAY_RELEASED=0 可只開大廳、遊戲顯示即將開放
 const RELEASED=process.env.PLAY_RELEASED!=='0';
@@ -20,20 +20,21 @@ const baseRtp=c=>W.reduce((s,_,i)=>s+p(i)**3*c.pays[i]+p(i)**2*(1-p(i))*c.pair,0
 const pick=()=>{let r=crypto.randomInt(WT);for(let i=0;i<W.length;i++){if(r<W[i])return i;r-=W[i];}return W.length-1;};
 const grid=()=>[0,1,2].map(()=>[pick(),pick(),pick()]);           // grid[reel][row]
 const line=g=>g.map(c=>c[1]);
-// 依目標 RTP 抽一次：先正常抽；中獎時以 rtp/base 的機率保留，否則重抽成不中獎的盤面 → 期望 RTP＝目標
-function draw(c){const keep=Math.min(1,c.rtp/100/baseRtp(c));let g=grid(),m=lineWin(line(g),c);
- if(m>0&&crypto.randomInt(1e6)>=keep*1e6){for(let k=0;k<100;k++){g=grid();if(!lineWin(line(g),c))break;}if(lineWin(line(g),c)){g[1][1]=(g[0][1]+1)%6;}m=lineWin(line(g),c);}
- return {grid:g,mult:m};}
+// 公平抽獎：每格獨立依固定權重以 crypto.randomInt 抽出，盤面怎麼出就怎麼算，不做任何改寫或重抽。
+// 回饋率只由賠率表（pays/pair）決定：RTP＝baseRtp(賠率表)。
+const rtpOf=c=>Math.round(baseRtp(c)*1000)/10;
+function draw(c){const g=grid();return {grid:g,mult:lineWin(line(g),c)};}
 function validate(id,b,old){const e=[];const n=(v,lo,hi,lbl)=>{const x=Number(v);if(!Number.isInteger(x)||x<lo||x>hi){e.push(`${lbl} 要是 ${lo}–${hi} 的整數`);return null;}return x;};
- const pays=GAMES[id].syms.map((s,i)=>n(b['pay'+i],1,LIM.payMax,s+' 倍數'));const pair=n(b.pair,0,LIM.pairMax,'前兩格相同倍數');const rtp=n(b.rtp,LIM.rtpMin,LIM.rtpMax,'目標回饋率');
- const c={enabled:b.enabled==='1'||b.enabled===true,pays,pair,rtp};
- if(!e.length&&baseRtp(c)*100<rtp)e.push(`目前倍數最多只能做到 ${(baseRtp(c)*100).toFixed(1)}% 回饋，達不到 ${rtp}%，請調高倍數或調低目標`);
+ const pays=GAMES[id].syms.map((s,i)=>n(b['pay'+i],1,LIM.payMax,s+' 倍數'));const pair=n(b.pair,0,LIM.pairMax,'前兩格相同倍數');
+ if(b.rtp!==undefined&&b.rtp!==''){const r=Number(b.rtp);if(!Number.isFinite(r)||r<LIM.rtpMin||r>LIM.rtpMax)e.push(`目標回饋率要在 ${LIM.rtpMin}–${LIM.rtpMax}% 之間`);}
+ const c={enabled:b.enabled==='1'||b.enabled===true,pays,pair,rtp:null};
+ if(!e.length){c.rtp=rtpOf(c);if(c.rtp<LIM.rtpMin||c.rtp>LIM.rtpMax)e.push(`這組賠率的回饋率是 ${c.rtp}%，超出允許的 ${LIM.rtpMin}–${LIM.rtpMax}%，請調整倍數`);}
  return e.length?{err:e}:{c};}
 const tpe=t=>new Date(t).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',hour12:false})+'（台北）';
 
 module.exports=function mount(app,X){const {S,FT,auth,admin,chk,jchk,csrf,esc,oplog,rateLimit,express}=X;const pool=()=>S.pg();
  const MEM={}; // 沒有資料庫時的錢包（單執行緒、同步扣加＝不可分割）
- const cfg=id=>{const all=S.get('play_config')||{};const c={...GAMES[id].def,...(all[id]||{})};return RELEASED?c:{...c,enabled:false};};
+ const cfg=id=>{const all=S.get('play_config')||{};let c={...GAMES[id].def,...(all[id]||{})};c.rtp=rtpOf(c);if(c.rtp<LIM.rtpMin||c.rtp>LIM.rtpMax)c={...GAMES[id].def,enabled:c.enabled,rtp:rtpOf(GAMES[id].def)};return RELEASED?c:{...c,enabled:false};};
  async function init(){if(pool()){await pool().query(`CREATE TABLE IF NOT EXISTS play_wallet(u text PRIMARY KEY, pts bigint NOT NULL CHECK(pts>=0), started timestamptz NOT NULL DEFAULT now(), spins int NOT NULL DEFAULT 0)`);
    await pool().query(`CREATE TABLE IF NOT EXISTS play_spin(id bigserial PRIMARY KEY, u text NOT NULL, game text NOT NULL, bet int NOT NULL, win bigint NOT NULL, grid jsonb NOT NULL, t timestamptz NOT NULL DEFAULT now())`);
    await pool().query(`CREATE TABLE IF NOT EXISTS play_audit(id bigserial PRIMARY KEY, t timestamptz NOT NULL DEFAULT now(), by_user text NOT NULL, game text NOT NULL, old jsonb, new jsonb)`);}
@@ -69,12 +70,12 @@ module.exports=function mount(app,X){const {S,FT,auth,admin,chk,jchk,csrf,esc,op
  const page=async(q,msg)=>{const t=csrf(q),L=await auditList();const fmt=c=>c?`${c.enabled?'開':'關'}｜RTP ${c.rtp}%｜前兩格 ${c.pair}x｜${(c.pays||[]).join('/')}`:'—';
   return `<!doctype html><html lang="zh-TW"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>小遊戲賠率設定</title><link rel="stylesheet" href="/play/a/admin.css"></head><body><div class="wrap">
 <p><a href="/admin">← 回管理後台</a>｜<a href="/admin/features">功能開關</a></p><h1>小遊戲賠率設定</h1>
-<p class="note">${LABEL}。這裡只能調整遊戲開關、賠率倍數和目標回饋率（RTP ${LIM.rtpMin}–${LIM.rtpMax}%）；不能發點、改點。每次儲存都會記錄管理員、修改前後和台北時間。大廳總開關在「功能開關 → 娛樂」${FT.on('play')?'（目前：開）':'（目前：關）'}。</p>${msg?`<p class="msg">${esc(msg)}</p>`:''}${RELEASED?'':'<p class="msg">目前只開放大廳，遊戲本身尚未開放（美術重做中）；這裡的設定會先存起來，遊戲上線後生效。</p>'}
+<p class="note">${LABEL}。這裡只能調整遊戲開關、賠率倍數和回饋率（由倍數算出，須在 RTP ${LIM.rtpMin}–${LIM.rtpMax}%）；不能發點、改點。每次儲存都會記錄管理員、修改前後和台北時間。大廳總開關在「功能開關 → 娛樂」${FT.on('play')?'（目前：開）':'（目前：關）'}。</p>${msg?`<p class="msg">${esc(msg)}</p>`:''}${RELEASED?'':'<p class="msg">目前只開放大廳，遊戲本身尚未開放（美術重做中）；這裡的設定會先存起來，遊戲上線後生效。</p>'}
 ${Object.entries(GAMES).map(([id,g])=>{const c=cfg(id);return `<form class="box" method="post" action="/admin/play-odds"><input type="hidden" name="_csrf" value="${t}"><input type="hidden" name="game" value="${id}"><h2>${esc(g.name)}</h2>
 <label class="ck"><input type="checkbox" name="enabled" value="1" ${c.enabled?'checked':''}> 開放這款遊戲</label>
 <div class="gr">${g.syms.map((sy,i)=>`<label>${esc(sy)} 三連（倍）<input type="number" name="pay${i}" min="1" max="${LIM.payMax}" value="${c.pays[i]}" required></label>`).join('')}
-<label>前兩格相同（倍）<input type="number" name="pair" min="0" max="${LIM.pairMax}" value="${c.pair}" required></label><label>目標回饋率 RTP（%）<input type="number" name="rtp" min="${LIM.rtpMin}" max="${LIM.rtpMax}" value="${c.rtp}" required></label></div>
-<p class="note">依目前倍數，最高可做到 ${(baseRtp(c)*100).toFixed(1)}%；實際中獎率約 ${(c.rtp/100/baseRtp(c)*W.reduce((a,_,i)=>a+p(i)**2,0)*100).toFixed(1)}%。</p><button>儲存 ${esc(g.name)}</button></form>`;}).join('')}
+<label>前兩格相同（倍）<input type="number" name="pair" min="0" max="${LIM.pairMax}" value="${c.pair}" required></label><label>回饋率 RTP（由倍數算出）<output>${c.rtp}%</output></label></div>
+<p class="note">回饋率完全由上面的倍數決定（每格公平隨機，不改寫結果），必須落在 ${LIM.rtpMin}–${LIM.rtpMax}%，超出會被拒絕。中獎率固定約 ${(W.reduce((a,_,i)=>a+p(i)**2,0)*100).toFixed(1)}%。</p><button>儲存 ${esc(g.name)}</button></form>`;}).join('')}
 <div class="box"><h2>修改紀錄（最近 50 筆）</h2><table><tr><th>時間</th><th>管理員</th><th>遊戲</th><th>修改前</th><th>修改後</th></tr>${L.map(a=>`<tr><td>${tpe(a.t)}</td><td>${esc(a.by_user)}</td><td>${esc((GAMES[a.game]||{}).name||a.game)}</td><td>${esc(fmt(a.old))}</td><td>${esc(fmt(a.new))}</td></tr>`).join('')||'<tr><td colspan="5">尚無紀錄</td></tr>'}</table></div></div></body></html>`;};
  app.get('/admin/play-odds',auth,admin,async(q,s)=>{const m=q.session.flash;delete q.session.flash;s.set('Cache-Control','no-store').type('html').send(await page(q,m));});
  app.post('/admin/play-odds',auth,admin,chk,async(q,s)=>{const id=String(q.body.game||'');if(!Object.hasOwn(GAMES,id)){q.session.flash='沒有這款遊戲';return s.redirect('/admin/play-odds');}
@@ -82,6 +83,6 @@ ${Object.entries(GAMES).map(([id,g])=>{const c=cfg(id);return `<form class="box"
   const old=cfg(id),all={...(S.get('play_config')||{}),[id]:v.c};await S.set('play_config',all);
   const rec={t:new Date().toISOString(),by_user:me(q),game:id,old,new:v.c};
   if(pool())await pool().query('INSERT INTO play_audit(by_user,game,old,new) VALUES($1,$2,$3,$4)',[rec.by_user,id,JSON.stringify(old),JSON.stringify(v.c)]);else{const L=S.get('play_audit')||[];L.unshift(rec);await S.set('play_audit',L.slice(0,500));}
-  oplog(q,'修改小遊戲賠率',GAMES[id].name,`RTP ${old.rtp}→${v.c.rtp}%｜${old.enabled?'開':'關'}→${v.c.enabled?'開':'關'}`);q.session.flash='✓ 已儲存 '+GAMES[id].name;s.redirect('/admin/play-odds');});
+  oplog(q,'修改小遊戲賠率',GAMES[id].name,`${old.enabled?'開':'關'}→${v.c.enabled?'開':'關'}｜RTP ${old.rtp}→${v.c.rtp}%｜前兩格 ${old.pair}→${v.c.pair}x｜倍數 ${old.pays.join('/')}→${v.c.pays.join('/')}`);q.session.flash='✓ 已儲存 '+GAMES[id].name;s.redirect('/admin/play-odds');});
  return init();};
-module.exports.GAMES=GAMES;module.exports.baseRtp=baseRtp;module.exports.draw=draw;module.exports.validate=validate;module.exports.lineWin=lineWin;module.exports.LIM=LIM;
+module.exports.GAMES=GAMES;module.exports.baseRtp=baseRtp;module.exports.draw=draw;module.exports.validate=validate;module.exports.lineWin=lineWin;module.exports.LIM=LIM;module.exports.rtpOf=rtpOf;
