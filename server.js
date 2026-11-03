@@ -60,7 +60,7 @@ app.post('/login',rateLimit({windowMs:15*60e3,limit:20,handler:(q,s)=>{susp(q,'�
  if(ok&&u&&!eff(U.load(),name).ok){rec(false);return s.redirect('/login?e=off');}
  if(ok&&u){const us=U.load();us[name]={...us[name],lastLogin:new Date().toISOString(),lastIp:q.ip};U.save(us);rec(true);}else rec(false);
  if(ok&&u){BF.delete('ipuser:'+q.ip+'|'+name);AF.delete(name);return q.session.regenerate(()=>{q.session.user=name;q.session.ip=q.ip;s.redirect('/');});}
- console.log('LOGIN-FAIL ip',q.ip,'cf',String(q.get('cf-connecting-ip')||'-').slice(0,45),'xff',String(q.get('x-forwarded-for')||'-').slice(0,120));bfFail(q,'ip:'+q.ip);if(VALID(name)){bfFail(q,'ipuser:'+q.ip+'|'+name);AF.set(name,{f:af.f+1,t:Date.now()});}s.redirect('/login?e=1');});
+ bfFail(q,'ip:'+q.ip);if(VALID(name)){bfFail(q,'ipuser:'+q.ip+'|'+name);AF.set(name,{f:af.f+1,t:Date.now()});}s.redirect('/login?e=1');});
 app.post('/logout',(q,s)=>q.session.destroy(()=>{s.clearCookie('calc.sid');s.redirect('/login');}));
 
 // 自助改密碼（首次登入／重設後強制）
