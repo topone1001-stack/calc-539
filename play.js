@@ -8,6 +8,8 @@ const GAMES={
  dodo:{name:'嘟嘟叢林探險',theme:'jungle',syms:['黃金寶箱','金鑰匙','獅子徽章','猴子徽章','香蕉','椰子'],
   def:{enabled:true,pays:[250,90,40,18,12,8],pair:2,rtp:92}}};
 const SOON=[{id:'scarab',name:'聖甲蟲寶庫',img:'scarab'},{id:'sunking',name:'日鷹王座',img:'sunking.jpg'},{id:'river',name:'尼羅星河',img:'river'},{id:'parrot',name:'鸚鵡金島',img:'parrot'}];
+// 遊戲本身尚未開放（美術重做中）：只有大廳上線。設 PLAY_RELEASED=0 可只開大廳、遊戲顯示即將開放
+const RELEASED=process.env.PLAY_RELEASED!=='0';
 const BETS=[10,50,100];const START_MIN=100,START_MAX=100000;
 const LIM={payMax:1000,pairMax:10,rtpMin:50,rtpMax:99};
 const LABEL='娛樂用虛擬點數，無任何價值';
@@ -31,7 +33,7 @@ const tpe=t=>new Date(t).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',hour12:f
 
 module.exports=function mount(app,X){const {S,FT,auth,admin,chk,jchk,csrf,esc,oplog,rateLimit,express}=X;const pool=()=>S.pg();
  const MEM={}; // 沒有資料庫時的錢包（單執行緒、同步扣加＝不可分割）
- const cfg=id=>{const all=S.get('play_config')||{};return {...GAMES[id].def,...(all[id]||{})};};
+ const cfg=id=>{const all=S.get('play_config')||{};const c={...GAMES[id].def,...(all[id]||{})};return RELEASED?c:{...c,enabled:false};};
  async function init(){if(pool()){await pool().query(`CREATE TABLE IF NOT EXISTS play_wallet(u text PRIMARY KEY, pts bigint NOT NULL CHECK(pts>=0), started timestamptz NOT NULL DEFAULT now(), spins int NOT NULL DEFAULT 0)`);
    await pool().query(`CREATE TABLE IF NOT EXISTS play_spin(id bigserial PRIMARY KEY, u text NOT NULL, game text NOT NULL, bet int NOT NULL, win bigint NOT NULL, grid jsonb NOT NULL, t timestamptz NOT NULL DEFAULT now())`);
    await pool().query(`CREATE TABLE IF NOT EXISTS play_audit(id bigserial PRIMARY KEY, t timestamptz NOT NULL DEFAULT now(), by_user text NOT NULL, game text NOT NULL, old jsonb, new jsonb)`);}
@@ -55,7 +57,7 @@ module.exports=function mount(app,X){const {S,FT,auth,admin,chk,jchk,csrf,esc,op
  app.get(/^\/play\/a\/([a-z0-9_-]+\.(css|js|jpg|svg))$/,auth,on,(q,s)=>s.sendFile(P(q.params[0]),{maxAge:'1h'}));
  // 會員只拿得到名稱和開關，不給賠率設定
  app.get('/api/play/lobby',auth,on,async(q,s)=>{const w=await W_.get(me(q));s.set('Cache-Control','no-store').json({user:me(q),label:LABEL,wallet:w,bets:BETS,startMin:START_MIN,startMax:START_MAX,
-  games:Object.entries(GAMES).map(([id,g])=>({id,name:g.name,theme:g.theme,syms:g.syms,on:cfg(id).enabled})),soon:SOON});});
+  games:Object.entries(GAMES).map(([id,g])=>({id,name:g.name,theme:g.theme,syms:g.syms,on:cfg(id).enabled,released:RELEASED})),soon:SOON});});
  app.post('/api/play/start',auth,on,jchk,async(q,s)=>{const n=q.body&&q.body.points;if(typeof n!=='number'||!Number.isInteger(n)||n<START_MIN||n>START_MAX)return s.status(400).json({error:`起始點數要是 ${START_MIN}–${START_MAX} 的整數`});
   const r=await W_.start(me(q),n);if(r==null)return s.status(409).json({error:'目前還有點數，用完才能重新輸入起始點數'});s.json({ok:true,pts:r});});
  app.post('/api/play/spin/:id',auth,on,spinLimit,jchk,async(q,s)=>{const id=q.params.id;if(!Object.hasOwn(GAMES,id))return s.status(404).json({error:'沒有這款遊戲'});const c=cfg(id);if(!c.enabled)return s.status(404).json({error:'這款遊戲已關閉'});
@@ -67,7 +69,7 @@ module.exports=function mount(app,X){const {S,FT,auth,admin,chk,jchk,csrf,esc,op
  const page=async(q,msg)=>{const t=csrf(q),L=await auditList();const fmt=c=>c?`${c.enabled?'開':'關'}｜RTP ${c.rtp}%｜前兩格 ${c.pair}x｜${(c.pays||[]).join('/')}`:'—';
   return `<!doctype html><html lang="zh-TW"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>小遊戲賠率設定</title><link rel="stylesheet" href="/play/a/admin.css"></head><body><div class="wrap">
 <p><a href="/admin">← 回管理後台</a>｜<a href="/admin/features">功能開關</a></p><h1>小遊戲賠率設定</h1>
-<p class="note">${LABEL}。這裡只能調整遊戲開關、賠率倍數和目標回饋率（RTP ${LIM.rtpMin}–${LIM.rtpMax}%）；不能發點、改點。每次儲存都會記錄管理員、修改前後和台北時間。大廳總開關在「功能開關 → 娛樂」${FT.on('play')?'（目前：開）':'（目前：關）'}。</p>${msg?`<p class="msg">${esc(msg)}</p>`:''}
+<p class="note">${LABEL}。這裡只能調整遊戲開關、賠率倍數和目標回饋率（RTP ${LIM.rtpMin}–${LIM.rtpMax}%）；不能發點、改點。每次儲存都會記錄管理員、修改前後和台北時間。大廳總開關在「功能開關 → 娛樂」${FT.on('play')?'（目前：開）':'（目前：關）'}。</p>${msg?`<p class="msg">${esc(msg)}</p>`:''}${RELEASED?'':'<p class="msg">目前只開放大廳，遊戲本身尚未開放（美術重做中）；這裡的設定會先存起來，遊戲上線後生效。</p>'}
 ${Object.entries(GAMES).map(([id,g])=>{const c=cfg(id);return `<form class="box" method="post" action="/admin/play-odds"><input type="hidden" name="_csrf" value="${t}"><input type="hidden" name="game" value="${id}"><h2>${esc(g.name)}</h2>
 <label class="ck"><input type="checkbox" name="enabled" value="1" ${c.enabled?'checked':''}> 開放這款遊戲</label>
 <div class="gr">${g.syms.map((sy,i)=>`<label>${esc(sy)} 三連（倍）<input type="number" name="pay${i}" min="1" max="${LIM.payMax}" value="${c.pays[i]}" required></label>`).join('')}
