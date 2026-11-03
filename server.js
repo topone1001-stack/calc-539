@@ -6,6 +6,12 @@ const helmet=require('helmet');
 app.use(helmet({contentSecurityPolicy:{useDefaults:false,directives:{'default-src':["'self'"],'script-src':["'self'","'unsafe-inline'",'https://cdn.jsdelivr.net'],'script-src-attr':["'unsafe-inline'"],'style-src':["'self'","'unsafe-inline'"],
  'img-src':["'self'",'data:','https://i.ytimg.com'],'media-src':["'self'"],'connect-src':["'self'"],'font-src':["'self'",'data:'],'frame-src':['https://www.youtube.com','https://www.youtube-nocookie.com'],'object-src':["'none'"],'base-uri':["'self'"],'form-action':["'self'"],'frame-ancestors':["'none'"],...(process.env.NODE_ENV==='production'?{'upgrade-insecure-requests':[]}:{})}},
  crossOriginEmbedderPolicy:false,referrerPolicy:{policy:'strict-origin-when-cross-origin'},hsts:{maxAge:31536000,includeSubDomains:true}}));
+// 全站每 IP 頻率上限（含靜態頁），擋掃描／濫用；正常使用遠低於此
+app.use(rateLimit({windowMs:60e3,limit:300,standardHeaders:true,legacyHeaders:false,skip:q=>q.path==='/healthz',handler:(q,s)=>s.status(429).type('text').send('429 請求太頻繁，請稍後再試')}));
+// 嚴格 CSP 先以 Report-Only 試行（不含 unsafe-inline），違規回報到 /csp-report 寫進 log
+app.use((q,s,n)=>{s.set('Content-Security-Policy-Report-Only',"default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; script-src-attr 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://i.ytimg.com; connect-src 'self'; frame-src https://www.youtube.com https://www.youtube-nocookie.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; report-uri /csp-report");n();});
+const CSPR=rateLimit({windowMs:60e3,limit:30,standardHeaders:false,legacyHeaders:false});
+app.post('/csp-report',CSPR,express.json({type:['application/csp-report','application/json'],limit:'8kb'}),(q,s)=>{try{const r=(q.body&&q.body['csp-report'])||{};console.log('CSP-RO',String(r['document-uri']||'').slice(0,120),String(r['violated-directive']||'').slice(0,60),String(r['blocked-uri']||'').slice(0,120));}catch(e){}s.status(204).end();});
 app.get('/healthz',(q,s)=>s.set('Cache-Control','no-store').type('text').send('ok'));
 const PROD=process.env.NODE_ENV==='production';
 if(process.env.SEED_ADMIN_HASH){const us=U.load();if(!Object.values(us).some(u=>u.role==='admin'||!u.role)){us.admin={hash:process.env.SEED_ADMIN_HASH,role:'admin',enabled:true,expires:'',perms:['bao','col','car','prize','draw']};await S.set('users',us);console.log('seeded admin');}}
@@ -92,7 +98,7 @@ app.get('/api/vnprov/:r',auth,can('hist','stats','adv','share','fun'),(q,s)=>{co
 app.get('/api/hist-status',auth,admin,(q,s)=>s.json({...HI.status(),counts:Object.fromEntries(GK.map(g=>[g,HI.data(g).total]))}));
 app.get('/api/csrf',auth,(q,s)=>s.json({csrf:csrf(q)}));
 app.get('/api/mysets',auth,can('mynum'),(q,s)=>s.json({sets:q.u.sets}));
-app.post('/api/mysets',auth,can('mynum'),jchk,(q,s)=>{const sets=(Array.isArray(q.body.sets)?q.body.sets:[]).slice(0,2).map(x=>({game:GK.includes(x.game)?x.game:'539',name:String(x.name||'').replace(/[<>"'&`]/g,'').slice(0,20),nums:[...new Set((x.nums||[]).map(Number).filter(n=>n>=1&&n<=55))].slice(0,12)}));
+app.post('/api/mysets',auth,can('mynum'),jchk,(q,s)=>{const sets=(Array.isArray(q.body.sets)?q.body.sets:[]).slice(0,2).map(x=>({game:x&&GK.includes(x.game)?x.game:'539',name:String(x&&x.name||'').replace(/[<>"'&`]/g,'').slice(0,20),nums:[...new Set((Array.isArray(x&&x.nums)?x.nums:[]).map(Number).filter(n=>n>=1&&n<=55))].slice(0,12)}));
  const us=U.load();us[q.session.user]={...us[q.session.user],sets};U.save(us);oplog(q,'修改我的號碼',q.session.user,sets.map(x=>x.nums.length+'碼').join('/'));s.json({ok:true,sets});});
 // 彩迷熱門號碼分享：每人每期每遊戲一次，最多 10 碼
 const nextKey=g=>{const d=HI.data(g);const L=d.rows[d.rows.length-1];if(!L)return 'next';if(g==='hk'){const [y,n]=L[0].split('/');return y+'/'+String(+n+1).padStart(3,'0');}return String(+L[0]+1);};
@@ -100,7 +106,7 @@ app.delete('/api/share/:g',auth,can('share'),jchk,(q,s)=>{const g=q.params.g;if(
 app.get('/favicon.ico',(q,s)=>s.status(204).set('Cache-Control','public, max-age=604800').end());
 app.get('/api/share/:g',auth,can('share'),(q,s)=>{const g=q.params.g;if(!GK.includes(g))return s.status(404).end();const k=nextKey(g),all=(S.get('shares')||{})[g]||{},cur=all[k]||{};const cnt={};Object.values(cur).forEach(a=>a.forEach(n=>cnt[n]=(cnt[n]||0)+1));
  s.json({period:k,users:Object.keys(cur).length,cnt,mine:cur[q.session.user]||null});});
-app.post('/api/share/:g',auth,can('share'),jchk,(q,s)=>{const g=q.params.g;if(!GK.includes(g))return s.status(404).end();const mx=HI.data(g).max||49;const nums=[...new Set((q.body.nums||[]).map(Number).filter(n=>n>=1&&n<=mx))].slice(0,10);if(!nums.length)return s.status(400).json({error:'請選號碼'});
+app.post('/api/share/:g',auth,can('share'),jchk,(q,s)=>{const g=q.params.g;if(!GK.includes(g))return s.status(404).end();const mx=HI.data(g).max||49;const nums=[...new Set((Array.isArray(q.body.nums)?q.body.nums:[]).map(Number).filter(n=>n>=1&&n<=mx))].slice(0,10);if(!nums.length)return s.status(400).json({error:'請選號碼'});
  const sh=S.get('shares')||{},k=nextKey(g);sh[g]=sh[g]||{};for(const kk of Object.keys(sh[g]))if(kk!==k)delete sh[g][kk];sh[g][k]=sh[g][k]||{};if(sh[g][k][q.session.user])return s.status(409).json({error:'本期已分享過'});
  sh[g][k][q.session.user]=nums;S.set('shares',sh);oplog(q,'熱門分享',q.session.user,g+' '+k+'：'+nums.join(' '));s.json({ok:true});});
 app.get('/api/other',auth,can('other'),(q,s)=>FT.on('t_other')?s.json(DR.get().other||{}):s.status(404).json({error:'此功能已關閉'}));
