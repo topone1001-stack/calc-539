@@ -26,10 +26,17 @@ function parseMagayo(t,g,slot){const N=G[g].n;const out=[];const D=s=>{const m=s
 const MG='https://www.magayo.com/zht/lotto-results/vietnam/';
 // xoso.com.vn：越南本地開獎結果站，開獎後幾分鐘內公布，台灣打得開；Power/Mega 為主要來源，magayo 備援（也讓部署維運的 magayo 比對成為獨立第二來源）
 const XS={vn655:'https://xoso.com.vn/xo-so-power-655.html',vn645:'https://xoso.com.vn/xo-so-tu-chon-mega-645.html'};
-function parseXoso(t,g){const out=[];const re=/(\d{2})\/(\d{2})\/(\d{4})<\/a><\/h2>[\s\S]{0,300}?#0*(\d+)<\/strong><\/div><div class=jackpot-item>([\s\S]*?)<\/div>/g;let m;
- while((m=re.exec(t))&&out.length<30){const all=[...m[5].matchAll(/<span class="?btn-results( bg_jackpot)?"?>\s*(\d{1,2})\s*<\/span>/g)];const main=all.filter(x=>!x[1]).map(x=>+x[2]),sp=all.find(x=>x[1]);
-  const date=`${m[3]}-${m[2]}-${m[1]}`;out.push({period:dkey(date),no:String(m[4]).padStart(5,'0'),date,nums:main.sort((a,c)=>a-c),special:G[g].sp&&sp?spOk(+sp[2]):null});}
- return out.filter(x=>valid(x,g)&&(!G[g].sp||x.special));}
+function xosoRow(blk,g){const all=[...blk.matchAll(/<span class="?btn-results( bg_jackpot)?"?>\s*(\d{1,2})\s*<\/span>/g)];const main=all.filter(x=>!x[1]).map(x=>+x[2]),sp=all.find(x=>x[1]);return {nums:main.sort((a,c)=>a-c),special:G[g].sp&&sp?spOk(+sp[2]):null};}
+function parseXoso(t,g){const out=[];
+ // 最新一期：頁首「Mở thưởng ngày <星期>, dd/mm/yyyy」——標題格式與歷史列表不同（日期在 </div></header> 前，不是 </a></h2>）
+ const top=t.match(/Mở thưởng ngày[^<]*?(\d{2})\/(\d{2})\/(\d{4})<\/div><\/header>/);
+ if(top){const st=top.index,en=(()=>{const i=t.indexOf('</section>',st);return i<0?st+4000:i;})();const blk=t.slice(st,en);
+  const no=blk.match(/Kỳ quay thưởng:\s*<strong>#?0*(\d+)<\/strong>/);
+  if(no){const r=xosoRow(blk,g),date=`${top[3]}-${top[2]}-${top[1]}`;const row={period:dkey(date),no:String(no[1]).padStart(5,'0'),date,...r};if(valid(row,g)&&(!G[g].sp||row.special))out.push(row);}}
+ const re=/(\d{2})\/(\d{2})\/(\d{4})<\/a><\/h2>[\s\S]{0,300}?#0*(\d+)<\/strong><\/div><div class=jackpot-item>([\s\S]*?)<\/div>/g;let m;
+ while((m=re.exec(t))&&out.length<30){const date=`${m[3]}-${m[2]}-${m[1]}`;
+  out.push({period:dkey(date),no:String(m[4]).padStart(5,'0'),date,...xosoRow(m[5],g)});}
+ const seen=new Set();return out.filter(x=>valid(x,g)&&(!G[g].sp||x.special)&&!seen.has(x.period)&&seen.add(x.period));}
 async function fetchGame(g){try{const t=await get(G[g].off);if(g==='vn535')throw new Error('official 5/35 format unverified');const h=parseOfficial(t,g);if(h.length)return {src:'official',hist:h};throw new Error('parse');}
  catch(e){if(XS[g]){try{const h=parseXoso(await get(XS[g]),g);if(h.length)return {src:'xoso',why:e.message,hist:h};}catch(e2){console.error('vn xoso',g,e2.message);}}
   let h=[];if(Array.isArray(G[g].mg)){for(let i=0;i<G[g].mg.length;i++){try{h=h.concat(parseMagayo(await get(MG+G[g].mg[i]+'/'),g,G[g].slots[i]));}catch(e2){console.error('vn magayo',G[g].mg[i],e2.message);}}}
