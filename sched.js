@@ -13,7 +13,7 @@ const VN_DAYS={vn655:[2,4,6],vn645:[0,3,5]};
 const VN535=[{slot:'13',win:[14*60,17*60]},{slot:'21',win:[22*60,23*60+59]}];
 const TW_DAYS={d539:[1,2,3,4,5,6],lotto:[2,5],super:[1,4]};
 // 各來源的等待時段：[開始分鐘, 結束分鐘]，以該來源當地日期為準
-const WIN={tw:[20*60+30,22*60+30],ca:[18*60+30,21*60],hk:[21*60+25,23*60],vn:[19*60,22*60]};
+const WIN={tw:[20*60+30,22*60+30],ca:[18*60+25,18*60+55],hk:[21*60+25,23*60],vn:[19*60,22*60]};// 加州：連續 4 天結果落在當地 18:47–18:49，縮成 18:25–18:55；冬令＝台北 10:25–10:55，夏令＝台北 09:25–09:55
 const latestDate=(c,k)=>{const x=c&&c[k];const r=Array.isArray(x)?x[0]:x&&x.latest;return r&&String(r.date).slice(0,10);};
 // 回傳 {wait:是否在等新一期, due:今天這期的日期, games:今天要開的彩種}
 function status(src,now,cache){

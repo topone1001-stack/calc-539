@@ -40,7 +40,7 @@ async function refreshCA(){caLast=Date.now();try{let src='lotterynet',rows=[],pr
  const prev=cache.ca||{};// lotteryusa 沒有獎金和下期資訊：沿用上次官方抓到的值
  cache.ca={updated:new Date().toISOString(),src,latest:hist[0],hist,prizesPeriod:prizes.length?hist[0].period:prev.prizesPeriod,prizes:prizes.length?prizes:(String(prev.prizesPeriod)===String(hist[0].period)?(prev.prizes||[]):[]),next:next||(prev.next&&prev.next.date>hist[0].date?prev.next:null)};
  save();console.log('ca updated',src,hist[0].period);}catch(e){console.error('ca fetch failed:',e.message);}}
-function tickCA(){const d=tpe(),hm=d.getUTCHours()*60+d.getUTCMinutes();if((hm>=9*60+30&&hm<=11*60+30)||Date.now()-caLast>=60*60e3-30e3)refreshCA();}
+function tickCA(){if(Date.now()-caLast>=60*60e3-30e3)refreshCA();}// 開獎時段由 sched.WIN.ca + fast() 每分鐘抓；其餘時段每小時一次
 // 香港六合彩：HKJC 官方 GraphQL（查詢字串須與官網完全一致，存在 hk-query.graphql）
 const HKQ=require('fs').readFileSync(require('path').join(__dirname,'hk-query.graphql'),'utf8');let hkLast=0;
 const HKP=['頭獎','二獎','三獎','四獎','五獎','六獎','七獎'];

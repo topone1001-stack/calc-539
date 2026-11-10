@@ -12,6 +12,10 @@ t('加州夏令 台北 09:40 等待',()=>assert.equal(SC.status('ca',at('2026-10
 t('加州 已有 10/26 期→不等',()=>assert.equal(SC.status('ca',at('2026-10-27T09:40:00+08:00'),{ca:{latest:{period:'12043',date:'2026-10-26'}}}).wait,false));
 t('加州冬令 台北 09:40 還沒開（10:30 才開）',()=>assert.equal(SC.status('ca',at('2026-11-10T09:40:00+08:00'),{ca:{latest:{date:'2026-11-08'}}}).wait,false));
 t('加州冬令 台北 10:35 等待',()=>assert.equal(SC.status('ca',at('2026-11-10T10:35:00+08:00'),{ca:{latest:{date:'2026-11-08'}}}).wait,true));
+t('加州冬令 台北 10:20 還沒到縮短後時段',()=>assert.equal(SC.status('ca',at('2026-11-10T10:20:00+08:00'),{ca:{latest:{date:'2026-11-08'}}}).wait,false));
+t('加州冬令 台北 10:56 已過縮短後時段',()=>assert.equal(SC.status('ca',at('2026-11-10T10:56:00+08:00'),{ca:{latest:{date:'2026-11-08'}}}).wait,false));
+t('加州夏令 台北 09:50 仍在時段（當地 18:50）',()=>assert.equal(SC.status('ca',at('2026-10-27T09:50:00+08:00'),{ca:{latest:{date:'2026-10-25'}}}).wait,true));
+t('加州夏令 台北 10:00 已過縮短後時段',()=>assert.equal(SC.status('ca',at('2026-10-27T10:00:00+08:00'),{ca:{latest:{date:'2026-10-25'}}}).wait,false));
 t('六合彩 21:40 等待、23:30 不等',()=>{assert.equal(SC.status('hk',at('2026-10-27T21:40:00+08:00'),{hk:{latest:{date:'2026-10-25'}}}).wait,true);assert.equal(SC.status('hk',at('2026-10-27T23:30:00+08:00'),{hk:{latest:{date:'2026-10-25'}}}).wait,false);});
 t('版本號隨新一期改變',()=>assert.notEqual(SC.verOf(tw('a','b','c')),SC.verOf({...tw('a','b','c'),d539:[{period:'9',date:'a'}]})));
 // 流程：假的官方來源，第 1 次沒新期、第 2 次出現新期 → fast() 觸發 onNew
