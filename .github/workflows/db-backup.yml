@@ -21,6 +21,51 @@ jobs:
           psql --version
           pg_dump --version
 
+      # External access is currently disabled (empty IP allow list).
+      # Temporarily allow only this runner's IP, then restore in a later step.
+      - name: Temporarily allow runner IP
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_POSTGRES_ID: dpg-dbbr768n74is739faqh0-a
+        run: |
+          set -euo pipefail
+          set +x
+          python3 - <<'PY'
+          import ipaddress, json, os, sys, urllib.request
+
+          def req(method, path, data=None):
+              body = None if data is None else json.dumps(data).encode()
+              r = urllib.request.Request(
+                  "https://api.render.com" + path,
+                  data=body, method=method,
+                  headers={
+                      "Authorization": f"Bearer {os.environ['RENDER_API_KEY']}",
+                      "Accept": "application/json",
+                      "Content-Type": "application/json",
+                  },
+              )
+              try:
+                  with urllib.request.urlopen(r) as resp:
+                      raw = resp.read()
+                      return resp.status, json.loads(raw) if raw else {}
+              except urllib.error.HTTPError as e:
+                  print("HTTP", e.code, method, path, file=sys.stderr)
+                  print((e.read().decode() or "")[:300], file=sys.stderr)
+                  sys.exit(1)
+
+          ip = urllib.request.urlopen("https://api.ipify.org").read().decode().strip()
+          addr = ipaddress.ip_address(ip)
+          cidr = f"{ip}/32" if addr.version == 4 else f"{ip}/128"
+          print("allowing runner cidr", cidr)
+          st, d = req("PATCH", f"/v1/postgres/{os.environ['RENDER_POSTGRES_ID']}", {
+              "ipAllowList": [{"cidrBlock": cidr, "description": "gha-db-backup-temp"}]
+          })
+          print("patch_status", st, "db_status", d.get("status"), "ipAllowList", d.get("ipAllowList"))
+          got = [x.get("cidrBlock") for x in (d.get("ipAllowList") or [])]
+          if got != [cidr]:
+              sys.exit("allow list did not match runner IP")
+          PY
+
       - name: Dump database and table counts
         env:
           RENDER_DB_URL: ${{ secrets.RENDER_DB_URL }}
@@ -53,7 +98,19 @@ jobs:
 
           mkdir -p out
           echo "starting pg_dump"
-          pg_dump -Fc --no-owner --no-acl --dbname="$RENDER_DB_URL" -f out/calc539.dump
+          ok=0
+          for i in 1 2 3 4 5 6; do
+            if pg_dump -Fc --no-owner --no-acl --dbname="$RENDER_DB_URL" -f out/calc539.dump; then
+              ok=1
+              break
+            fi
+            echo "pg_dump try $i failed, retrying"
+            sleep 10
+          done
+          if [ "$ok" != 1 ]; then
+            echo "pg_dump failed after retries"
+            exit 1
+          fi
           echo "pg_dump finished"
           ls -l out/calc539.dump
 
@@ -89,6 +146,44 @@ jobs:
           rm -f out/calc539.dump out/counts.tsv
           ls -l out/
           echo "done"
+
+      - name: Restore empty IP allow list
+        if: always()
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_POSTGRES_ID: dpg-dbbr768n74is739faqh0-a
+        run: |
+          set -euo pipefail
+          set +x
+          python3 - <<'PY'
+          import json, os, sys, urllib.request
+
+          def req(method, path, data=None):
+              body = None if data is None else json.dumps(data).encode()
+              r = urllib.request.Request(
+                  "https://api.render.com" + path,
+                  data=body, method=method,
+                  headers={
+                      "Authorization": f"Bearer {os.environ['RENDER_API_KEY']}",
+                      "Accept": "application/json",
+                      "Content-Type": "application/json",
+                  },
+              )
+              try:
+                  with urllib.request.urlopen(r) as resp:
+                      raw = resp.read()
+                      return resp.status, json.loads(raw) if raw else {}
+              except urllib.error.HTTPError as e:
+                  print("HTTP", e.code, method, path, file=sys.stderr)
+                  print((e.read().decode() or "")[:300], file=sys.stderr)
+                  sys.exit(1)
+
+          st, d = req("PATCH", f"/v1/postgres/{os.environ['RENDER_POSTGRES_ID']}", {"ipAllowList": []})
+          print("patch_status", st, "db_status", d.get("status"), "ipAllowList", d.get("ipAllowList"))
+          if d.get("ipAllowList") not in ([], None):
+              sys.exit("failed to clear allow list")
+          print("allow list cleared")
+          PY
 
       - name: Upload encrypted artifact
         uses: actions/upload-artifact@v4
