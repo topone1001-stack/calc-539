@@ -1,0 +1,99 @@
+name: DB backup (manual)
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Install PostgreSQL client 16
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-client-16
+          psql --version
+          pg_dump --version
+
+      - name: Dump database and table counts
+        env:
+          RENDER_DB_URL: ${{ secrets.RENDER_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          PGSSLMODE: require
+          PGCONNECT_TIMEOUT: '30'
+        run: |
+          set -euo pipefail
+          set +x
+          if [ -z "${RENDER_DB_URL:-}" ] || [ -z "${BACKUP_PASSPHRASE:-}" ]; then
+            echo "missing required secrets"
+            exit 1
+          fi
+          python3 - <<'PY'
+          import os, urllib.parse
+          url = os.environ["RENDER_DB_URL"]
+          print(f"::add-mask::{url}", flush=True)
+          u = urllib.parse.urlparse(url)
+          for val in (
+              u.password,
+              urllib.parse.unquote(u.password) if u.password else None,
+              urllib.parse.quote(u.password, safe="") if u.password else None,
+              u.username,
+              u.hostname,
+              os.environ.get("BACKUP_PASSPHRASE"),
+          ):
+              if val:
+                  print(f"::add-mask::{val}", flush=True)
+          PY
+
+          mkdir -p out
+          echo "starting pg_dump"
+          pg_dump -Fc --no-owner --no-acl --dbname="$RENDER_DB_URL" -f out/calc539.dump
+          echo "pg_dump finished"
+          ls -l out/calc539.dump
+
+          echo "counting rows"
+          python3 - <<'PY'
+          import os, subprocess
+          url = os.environ["RENDER_DB_URL"]
+          env = os.environ.copy()
+
+          def psql(sql):
+              r = subprocess.run(
+                  ["psql", "-X", "-v", "ON_ERROR_STOP=1", "--dbname", url, "-At", "-c", sql],
+                  check=True, capture_output=True, text=True, env=env,
+              )
+              return r.stdout
+
+          tables = [t for t in psql(
+              "SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY 1"
+          ).splitlines() if t]
+          print(f"public base tables: {len(tables)}", flush=True)
+          lines = ["table\trow_count\n"]
+          for t in tables:
+              ident = '"' + t.replace('"', '""') + '"'
+              n = psql(f"SELECT count(*) FROM public.{ident}").strip()
+              lines.append(f"{t}\t{n}\n")
+              print(f"counted {t}", flush=True)
+          open("out/counts.tsv", "w").writelines(lines)
+          PY
+
+          echo "encrypting"
+          gpg --symmetric --batch --yes --cipher-algo AES256 --passphrase "$BACKUP_PASSPHRASE" -o out/calc539.dump.gpg out/calc539.dump
+          gpg --symmetric --batch --yes --cipher-algo AES256 --passphrase "$BACKUP_PASSPHRASE" -o out/counts.tsv.gpg out/counts.tsv
+          rm -f out/calc539.dump out/counts.tsv
+          ls -l out/
+          echo "done"
+
+      - name: Upload encrypted artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: calc539-db-backup
+          path: out/*.gpg
+          retention-days: 1
+          if-no-files-found: error
